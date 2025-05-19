@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "464701040005",
+    "firebase_url": "https://diplom-23056-default-rtdb.firebaseio.com",
+    "project_id": "diplom-23056",
+    "storage_bucket": "diplom-23056.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464701040005:android:d5785014a04bf14a1a10ec",
+        "android_client_info": {
+          "package_name": "com.example.jvgee"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJXgVmPFF5Hxqqy29cuUudzhwnKkZxCyA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:464701040005:android:52cfd4c10c6f83b11a10ec",
+        "android_client_info": {
+          "package_name": "com.example.jvgee_diplom"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJXgVmPFF5Hxqqy29cuUudzhwnKkZxCyA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
