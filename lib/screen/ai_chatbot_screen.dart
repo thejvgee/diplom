@@ -21,7 +21,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   static const int _maxRetries = 3;
   bool _showSuggestions = true;
 
-  // Predefined question suggestions for new users
   final List<String> _suggestions = [
     "Надад 100'000'000 төгрөг байна, би ямар хувьцаа авах ёстой вэ?",
     "35 настай хүнд хамгийн оновчтой хөрөнгийн орууалтын багц юу вэ?",
@@ -78,9 +77,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
 
   Future<void> _sendMessage([String? predefinedMessage]) async {
     String message = predefinedMessage ?? _controller.text;
-
     if (message.isEmpty) return;
-
     if (predefinedMessage == null) {
       _controller.clear();
     }
@@ -99,7 +96,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
     try {
       final response = await _geminiService.sendMessage(message);
 
-      // Check if response is an error message or using demo mode
       final bool isErrorResponse = response.contains('No internet connection') ||
           response.contains('Unable to connect') ||
           response.contains('Invalid API key') ||
@@ -108,9 +104,9 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           response.contains('error processing');
 
       final bool isUsingDemo = response.contains('Please note this is general advice') ||
-                              response.contains('This is simplified advice') ||
-                              response.contains('This general advice may need adjustment') ||
-                              response.contains('This is general guidance');
+          response.contains('This is simplified advice') ||
+          response.contains('This general advice may need adjustment') ||
+          response.contains('This is general guidance');
 
       setState(() {
         _messages.add({
@@ -128,7 +124,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
       _retryCount++;
       setState(() {
         if (_retryCount >= _maxRetries) {
-          // After too many failures, switch to demo mode responses
           _isUsingDemoMode = true;
           _messages.add({
             'sender': 'Хиймэл оюун зөвлөх',
@@ -176,16 +171,13 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   String _formatAIResponse(String text) {
-    // Check if this is an investment recommendation response
     final bool isInvestmentRecommendation = text.contains('Based on your investment amount') ||
-                                          text.contains('here are the best options');
+        text.contains('here are the best options');
 
     if (isInvestmentRecommendation) {
-      // Apply special formatting for investment recommendations
       return _formatInvestmentRecommendation(text);
     }
 
-    // Format bullet points and numbered lists
     final formattedText = text
         .replaceAllMapped(RegExp(r'^\s*[•-]\s*(.+)$', multiLine: true),
             (match) => '• ${match.group(1)}')
@@ -195,14 +187,12 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   String _formatInvestmentRecommendation(String text) {
-    // Extract the header and recommendations
     final parts = text.split('\n\n');
     String header = parts.isNotEmpty ? parts[0] : '';
 
-    // Format each recommendation line with bold symbols
     final formattedText = text.replaceAllMapped(
-      RegExp(r'^(\d+\.\s+)([A-Z]+(?:\.[A-Z])?):\s+([^-]+)\s*-\s*(.+)$', multiLine: true),
-      (match) => '${match.group(1)}**${match.group(2)}**: ${match.group(3)} - ${match.group(4)}'
+        RegExp(r'^(\d+\.\s+)([A-Z]+(?:\.[A-Z])?):\s+([^-]+)\s*-\s*(.+)$', multiLine: true),
+            (match) => '${match.group(1)}**${match.group(2)}**: ${match.group(3)} - ${match.group(4)}'
     );
 
     return formattedText;
@@ -214,11 +204,9 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
     final isDemo = message['isDemo'] == true;
     final text = message['text'] ?? '';
 
-    // Check if this is an investment recommendation
     final bool isInvestmentRecommendation = !isUser &&
         (text.contains('Based on your investment amount') || text.contains('here are the best options'));
 
-    // Format bullet points and lists in AI responses
     final formattedText = !isUser ? _formatAIResponse(text) : text;
 
     return Align(
@@ -230,8 +218,8 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           color: isError
               ? Colors.red[50]
               : (isUser ? Colors.blue[100] :
-                 (isInvestmentRecommendation ? Colors.green[50] :
-                  (isDemo ? Colors.grey[200] : Colors.blue[50]))),
+          (isInvestmentRecommendation ? Colors.green[50] :
+          (isDemo ? Colors.grey[200] : Colors.blue[50]))),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -243,7 +231,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           border: isError
               ? Border.all(color: Colors.red.shade200)
               : (isDemo ? Border.all(color: Colors.orange.shade200) :
-                 (isInvestmentRecommendation ? Border.all(color: Colors.green.shade300) : null)),
+          (isInvestmentRecommendation ? Border.all(color: Colors.green.shade300) : null)),
         ),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
@@ -292,13 +280,13 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
             isInvestmentRecommendation
                 ? _buildInvestmentRecommendationContent(formattedText)
                 : Text(
-                    formattedText,
-                    style: TextStyle(
-                      color: isError ? Colors.red.shade700 : (isUser ? Colors.black87 : Colors.black),
-                      height: 1.4,
-                      fontSize: 15,
-                    ),
-                  ),
+              formattedText,
+              style: TextStyle(
+                color: isError ? Colors.red.shade700 : (isUser ? Colors.black87 : Colors.black),
+                height: 1.4,
+                fontSize: 15,
+              ),
+            ),
             if (isError)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -319,10 +307,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   Widget _buildInvestmentRecommendationContent(String text) {
-    // Split the text into lines
     final lines = text.split('\n');
-
-    // Extract header and recommendations
     String header = '';
     List<String> recommendations = [];
     String footer = '';
@@ -362,9 +347,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         ),
         SizedBox(height: 8),
 
-        // Recommendations
         ...recommendations.map((rec) {
-          // Parse the recommendation
           final match = RegExp(r'^(\d+\.\s+)([A-Z]+(?:\.[A-Z])?):\s+([^-]+)\s*-\s*(.+)$')
               .firstMatch(rec);
 
@@ -612,15 +595,15 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
                 FloatingActionButton(
                   onPressed: _isLoading ? null : _sendMessage,
                   child: _isLoading
-                    ? SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : Icon(Icons.send),
+                      ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                      : Icon(Icons.send),
                   mini: true,
                   elevation: 2,
                   backgroundColor: _isLoading ? Colors.grey.shade400 : Colors.blue.shade600,
