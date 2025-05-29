@@ -22,7 +22,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
   List<Map<String, dynamic>> _stockRecommendations = [];
   List<Map<String, dynamic>> _financialTips = [];
   List<Map<String, dynamic>> _marketAlerts = [];
-  int _portfolioHealthScore = 75; // Default score
+  int _portfolioHealthScore = 75;
 
   late GeminiService _geminiService;
 
@@ -41,26 +41,21 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
     });
 
     try {
-      // Load all data concurrently
-      final recommendationsFuture = _geminiService.getStockRecommendations();
-      final tipsFuture = _geminiService.getFinancialTips();
-      final alertsFuture = _geminiService.getMarketAlerts();
+      final recommendationsFuture = _geminiService.getStockRecommendations(count:5);
+      final tipsFuture = _geminiService.getFinancialTips(count:5);
+      final alertsFuture = _geminiService.getMarketAlerts(count:3);
       final scoreFuture =
-          _geminiService.getPortfolioHealthScore(['AAPL', 'MSFT', 'GOOGL']);
+      _geminiService.getPortfolioHealthScore(['APU', 'AARD', 'LEND']);
 
-      // Wait for all futures to complete
       final recommendations = await recommendationsFuture;
       final tips = await tipsFuture;
       final alerts = await alertsFuture;
       final score = await scoreFuture;
-
-      // Check if any of the data is null and use empty lists as fallbacks
       final safeRecommendations =
           recommendations ?? _getDefaultStockRecommendations();
       final safeTips = tips ?? _getDefaultFinancialTips();
       final safeAlerts = alerts ?? _getDefaultMarketAlerts();
 
-      // Update state with the results
       if (mounted) {
         setState(() {
           _stockRecommendations = safeRecommendations;
@@ -86,7 +81,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
     }
   }
 
-  // Default data in case of errors
   List<Map<String, dynamic>> _getDefaultStockRecommendations() {
     return [
       {
@@ -111,13 +105,13 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
       {
         "title": "Гэнэтийн эрсдлийн сан",
         "description":
-            "Хөрөнгө оруулалт хийхээсээ өмнө 3-6 сарын зардлыг нөхөх хэрэглээний мөнгө хадгал ө.х нөөц.",
+        "Хөрөнгө оруулалт хийхээсээ өмнө 3-6 сарын зардлыг нөхөх хэрэглээний мөнгө хадгал ө.х нөөц.",
         "category": "Savings"
       },
       {
         "title": "Хөрөнгө оруулалтыг төрөлжүүлэх",
         "description":
-            "Эрсдэлийг бууруулахын тулд хөрөнгө оруулалтыг хөрөнгийн янз бүрийн ангилалд хуваа.",
+        "Эрсдэлийг бууруулахын тулд хөрөнгө оруулалтыг хөрөнгийн янз бүрийн ангилалд хуваа.",
         "category": "Investing"
       },
     ];
@@ -128,7 +122,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
       {
         "title": "Зах зээлийн тогтворгүй байдал",
         "description":
-            "Тогтворгүй байдал нэмэгдэж буй зах зээлүүд - багцаа хянаарай",
+        "Тогтворгүй байдал нэмэгдэж буй зах зээлүүд - багцаа хянаарай",
         "severity": "moderate",
         "impactedSectors": ["Technology", "Finance"]
       },
@@ -175,7 +169,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
     }
   }
 
-  // Safe getter methods to avoid null errors
   String _safeGetSymbol(Map<String, dynamic> recommendation) {
     final symbol = recommendation['symbol'];
     if (symbol is String && symbol.isNotEmpty) {
@@ -336,7 +329,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                                     fontSize: 30,
                                     fontWeight: FontWeight.bold,
                                     color:
-                                        _getScoreColor(_portfolioHealthScore),
+                                    _getScoreColor(_portfolioHealthScore),
                                   ),
                                 ),
                               ),
@@ -353,10 +346,10 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                                 _portfolioHealthScore >= 80
                                     ? 'Excellent'
                                     : _portfolioHealthScore >= 70
-                                        ? 'Good'
-                                        : _portfolioHealthScore >= 60
-                                            ? 'Fair'
-                                            : 'Needs Attention',
+                                    ? 'Good'
+                                    : _portfolioHealthScore >= 60
+                                    ? 'Fair'
+                                    : 'Needs Attention',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
@@ -368,10 +361,10 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                                 _portfolioHealthScore >= 80
                                     ? 'Таны багц сайн бүтэцтэй,тэнцвэртэй байна.'
                                     : _portfolioHealthScore >= 70
-                                        ? 'Таны багц сайн бүтэцтэй хэдий ч сайжруулах боломжтой.'
-                                        : _portfolioHealthScore >= 60
-                                            ? 'Гүйцэтгэлийг сайжруулахын тулд таны багцад зарим зохицуулалт шаардлагатай.'
-                                            : 'Таны багцийн бүтцийг дахин сайжруулах хэрэгтэй.',
+                                    ? 'Таны багц сайн бүтэцтэй хэдий ч сайжруулах боломжтой.'
+                                    : _portfolioHealthScore >= 60
+                                    ? 'Гүйцэтгэлийг сайжруулахын тулд таны багцад зарим зохицуулалт шаардлагатай.'
+                                    : 'Таны багцийн бүтцийг дахин сайжруулах хэрэгтэй.',
                                 style: TextStyle(fontSize: 14),
                               ),
                             ],
@@ -402,78 +395,78 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
             else
               ..._stockRecommendations
                   .map((recommendation) => Card(
-                        margin: EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.blue.shade50,
-                            child: Text(
-                              _safeGetSymbol(recommendation),
-                              style: TextStyle(color: Colors.blue.shade700),
+                margin: EdgeInsets.only(bottom: 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.shade50,
+                    child: Text(
+                      _safeGetSymbol(recommendation),
+                      style: TextStyle(color: Colors.blue.shade700),
+                    ),
+                  ),
+                  title: Row(
+                    children: [
+                      Expanded(
+                          child: Text(_safeGetString(
+                              recommendation, 'name', 'Stock'))),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getRecommendationColor(_safeGetString(
+                              recommendation, 'recommendation', '')),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _safeGetString(
+                              recommendation, 'recommendation', 'N/A'),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 4),
+                      Text(_safeGetString(recommendation, 'reason',
+                          'No reason provided')),
+                      SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text('confidence: '),
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: _safeGetInt(recommendation,
+                                  'confidence', 50) /
+                                  100,
+                              backgroundColor: Colors.grey.shade200,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                _getRecommendationColor(_safeGetString(
+                                    recommendation,
+                                    'recommendation',
+                                    '')),
+                              ),
+                              minHeight: 8,
                             ),
                           ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                  child: Text(_safeGetString(
-                                      recommendation, 'name', 'Stock'))),
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _getRecommendationColor(_safeGetString(
-                                      recommendation, 'recommendation', '')),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  _safeGetString(
-                                      recommendation, 'recommendation', 'N/A'),
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          SizedBox(width: 8),
+                          Text(
+                            '${_safeGetInt(recommendation, 'confidence', 50)}%',
+                            style:
+                            TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(height: 4),
-                              Text(_safeGetString(recommendation, 'reason',
-                                  'No reason provided')),
-                              SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text('confidence: '),
-                                  Expanded(
-                                    child: LinearProgressIndicator(
-                                      value: _safeGetInt(recommendation,
-                                              'confidence', 50) /
-                                          100,
-                                      backgroundColor: Colors.grey.shade200,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        _getRecommendationColor(_safeGetString(
-                                            recommendation,
-                                            'recommendation',
-                                            '')),
-                                      ),
-                                      minHeight: 8,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    '${_safeGetInt(recommendation, 'confidence', 50)}%',
-                                    style:
-                                        TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          isThreeLine: true,
-                        ),
-                      ))
+                        ],
+                      ),
+                    ],
+                  ),
+                  isThreeLine: true,
+                ),
+              ))
                   .toList(),
 
             SizedBox(height: 24),
