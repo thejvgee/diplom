@@ -160,152 +160,152 @@ class GeminiService {
   }
 
   Future<List<Map<String, dynamic>>> getStockRecommendations({required int count}) async {
-//     try {
-//       final hasConnectivity = await _checkConnectivity();
-//       if (!hasConnectivity) {
-//         return _getMockStockRecommendations();
-//       }
-//
-//       final prompt = '''
-// Based on current market conditions, provide 5 stock recommendations in the following JSON format:
-// [
-//   {
-//     "symbol": "AARD",
-//     "name": "Ард санхүүгийн нэгдэл ХК.",
-//     "recommendation": "Buy",
-//     "confidence": 85,
-//     "reason": "Тогтвортой үйл ажилгаатай"
-//   },
-//   ...
-// ]
-// Only respond with the JSON. No explanations or other text.
-// ''';
-//
-//       final response = await _model.generateContent([
-//         Content.text(prompt),
-//       ]);
-//
-//       if (response.text == null || response.text!.isEmpty) {
-//         return _getMockStockRecommendations();
-//       }
-//
-//       // Try to parse the JSON from the response
-//       try {
-//         // Extract JSON from response (removing any markdown code block syntax)
-//         String jsonText = response.text!
-//             .replaceAll('```json', '')
-//             .replaceAll('```', '')
-//             .trim();
-//
-//         final List<dynamic> parsed = jsonDecode(jsonText);
-//         return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
-//       } catch (e) {
-//         print('Error parsing recommendation JSON: $e');
-//         return _getMockStockRecommendations();
-//       }
-//     } catch (e) {
-//       print('Error getting stock recommendations: $e');
-//       return _getMockStockRecommendations();
-//     }
+    try {
+      final hasConnectivity = await _checkConnectivity();
+      if (!hasConnectivity) {
+        return _getMockStockRecommendations();
+      }
+
+      final prompt = '''
+Based on current market conditions, provide 5 stock recommendations in the following JSON format:
+[
+  {
+    "symbol": "AARD",
+    "name": "Ард санхүүгийн нэгдэл ХК.",
+    "recommendation": "Buy",
+    "confidence": 85,
+    "reason": "Тогтвортой үйл ажилгаатай"
+  },
+  ...
+]
+Only respond with the JSON. No explanations or other text.
+''';
+
+      final response = await _model.generateContent([
+        Content.text(prompt),
+      ]);
+
+      if (response.text == null || response.text!.isEmpty) {
+        return _getMockStockRecommendations();
+      }
+
+      // Try to parse the JSON from the response
+      try {
+        // Extract JSON from response (removing any markdown code block syntax)
+        String jsonText = response.text!
+            .replaceAll('```json', '')
+            .replaceAll('```', '')
+            .trim();
+
+        final List<dynamic> parsed = jsonDecode(jsonText);
+        return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
+      } catch (e) {
+        print('Error parsing recommendation JSON: $e');
+        return _getMockStockRecommendations();
+      }
+    } catch (e) {
+      print('Error getting stock recommendations: $e');
+      return _getMockStockRecommendations();
+    }
     return _getMockStockRecommendations();
   }
 
   Future<List<Map<String, dynamic>>> getFinancialTips({int count = 5}) async {
-//     try {
-//       final hasConnectivity = await _checkConnectivity();
-//       if (!hasConnectivity) {
-//         return _getMockFinancialTips(count);
-//       }
-//
-//       final prompt = '''
-// Provide 5 actionable financial tips in the following JSON format:
-// [
-//   {
-//     "title": "Emergency Fund First ",
-//     "description": "Build an emergency fund covering 3-6 months of expenses before investing",
-//     "category": "Savings"
-//   },
-//   ...
-// ]
-// Only respond with the JSON. No explanations or other text.
-// ''';
-//
-//       final response = await _model.generateContent([
-//         Content.text(prompt),
-//       ]);
-//
-//       if (response.text == null || response.text!.isEmpty) {
-//         return _getMockFinancialTips(count);
-//       }
-//
-//       // Try to parse the JSON from the response
-//       try {
-//         // Extract JSON from response (removing any markdown code block syntax)
-//         String jsonText = response.text!
-//             .replaceAll('```json', '')
-//             .replaceAll('```', '')
-//             .trim();
-//
-//         final List<dynamic> parsed = jsonDecode(jsonText);
-//         return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
-//       } catch (e) {
-//         print('Error parsing tips JSON: $e');
-//         return _getMockFinancialTips(count);
-//       }
-//     } catch (e) {
-//       print('Error getting financial tips: $e');
-//       return _getMockFinancialTips(count);
-//     }
+    try {
+      final hasConnectivity = await _checkConnectivity();
+      if (!hasConnectivity) {
+        return _getMockFinancialTips(count);
+      }
+
+      final prompt = '''
+Provide 5 actionable financial tips in the following JSON format:
+[
+  {
+    "title": "Emergency Fund First ",
+    "description": "Build an emergency fund covering 3-6 months of expenses before investing",
+    "category": "Savings"
+  },
+  ...
+]
+Only respond with the JSON. No explanations or other text.
+''';
+
+      final response = await _model.generateContent([
+        Content.text(prompt),
+      ]);
+
+      if (response.text == null || response.text!.isEmpty) {
+        return _getMockFinancialTips(count);
+      }
+
+      // Try to parse the JSON from the response
+      try {
+        // Extract JSON from response (removing any markdown code block syntax)
+        String jsonText = response.text!
+            .replaceAll('```json', '')
+            .replaceAll('```', '')
+            .trim();
+
+        final List<dynamic> parsed = jsonDecode(jsonText);
+        return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
+      } catch (e) {
+        print('Error parsing tips JSON: $e');
+        return _getMockFinancialTips(count);
+      }
+    } catch (e) {
+      print('Error getting financial tips: $e');
+      return _getMockFinancialTips(count);
+    }
     return _getMockFinancialTips(count);
   }
 
   Future<List<Map<String, dynamic>>> getMarketAlerts({int count = 3}) async {
-//     try {
-//       final hasConnectivity = await _checkConnectivity();
-//       if (!hasConnectivity) {
-//         return _getMockMarketAlerts(count);
-//       }
-//
-//       final prompt = '''
-// Create 3 market alerts based on current market conditions in the following JSON format:
-// [
-//   {
-//     "title": "Tech Sector Correction",
-//     "description": "Technology stocks showing signs of a 5-7% correction in the coming weeks",
-//     "severity": "moderate",
-//     "impactedSectors": ["Technology", "Semiconductors"]
-//   },
-//   ...
-// ]
-// Only respond with the JSON. No explanations or other text.
-// ''';
-//
-//       final response = await _model.generateContent([
-//         Content.text(prompt),
-//       ]);
-//
-//       if (response.text == null || response.text!.isEmpty) {
-//         return _getMockMarketAlerts(count);
-//       }
-//
-//       // Try to parse the JSON from the response
-//       try {
-//         // Extract JSON from response (removing any markdown code block syntax)
-//         String jsonText = response.text!
-//             .replaceAll('```json', '')
-//             .replaceAll('```', '')
-//             .trim();
-//
-//         final List<dynamic> parsed = jsonDecode(jsonText);
-//         return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
-//       } catch (e) {
-//         print('Error parsing alerts JSON: $e');
-//         return _getMockMarketAlerts(count);
-//       }
-//     } catch (e) {
-//       print('Error getting market alerts: $e');
-//       return _getMockMarketAlerts(count);
-//     }
+    try {
+      final hasConnectivity = await _checkConnectivity();
+      if (!hasConnectivity) {
+        return _getMockMarketAlerts(count);
+      }
+
+      final prompt = '''
+Create 3 market alerts based on current market conditions in the following JSON format:
+[
+  {
+    "title": "Tech Sector Correction",
+    "description": "Technology stocks showing signs of a 5-7% correction in the coming weeks",
+    "severity": "moderate",
+    "impactedSectors": ["Technology", "Semiconductors"]
+  },
+  ...
+]
+Only respond with the JSON. No explanations or other text.
+''';
+
+      final response = await _model.generateContent([
+        Content.text(prompt),
+      ]);
+
+      if (response.text == null || response.text!.isEmpty) {
+        return _getMockMarketAlerts(count);
+      }
+
+      // Try to parse the JSON from the response
+      try {
+        // Extract JSON from response (removing any markdown code block syntax)
+        String jsonText = response.text!
+            .replaceAll('```json', '')
+            .replaceAll('```', '')
+            .trim();
+
+        final List<dynamic> parsed = jsonDecode(jsonText);
+        return parsed.map((item) => Map<String, dynamic>.from(item)).toList();
+      } catch (e) {
+        print('Error parsing alerts JSON: $e');
+        return _getMockMarketAlerts(count);
+      }
+    } catch (e) {
+      print('Error getting market alerts: $e');
+      return _getMockMarketAlerts(count);
+    }
     return _getMockMarketAlerts(count);
   }
 
