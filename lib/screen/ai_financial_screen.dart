@@ -102,15 +102,15 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
           : _error != null
-              ? _buildErrorWidget()
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildPortfolioTab(),
-                    _buildRecommendationsTab(),
-                    _buildAnalysisTab(),
-                  ],
-                ),
+          ? _buildErrorWidget()
+          : TabBarView(
+        controller: _tabController,
+        children: [
+          _buildPortfolioTab(),
+          _buildRecommendationsTab(),
+          _buildAnalysisTab(),
+        ],
+      ),
     );
   }
 
@@ -162,7 +162,7 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
                   'Өдөр тутмын өөрчлөлт',
                   '${_portfolioAnalysis!['dailyChange']?.toStringAsFixed(2) ?? '0.00'}%',
                   isPositive:
-                      _portfolioAnalysis!['dailyChange']?.isPositive ?? false,
+                  _portfolioAnalysis!['dailyChange']?.isPositive ?? false,
                 ),
                 _buildPortfolioMetric(
                   'Эрсдлийн оноо',
@@ -223,8 +223,8 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
                         color: recommendation['rating'] == 'Buy'
                             ? Colors.green
                             : recommendation['rating'] == 'Sell'
-                                ? Colors.red
-                                : Colors.orange,
+                            ? Colors.red
+                            : Colors.orange,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -242,8 +242,8 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
                     color: recommendation['riskLevel'] == 'Low'
                         ? Colors.green
                         : recommendation['riskLevel'] == 'High'
-                            ? Colors.red
-                            : Colors.orange,
+                        ? Colors.red
+                        : Colors.orange,
                   ),
                 ),
               ],
@@ -278,7 +278,7 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
                 ElevatedButton(
                   onPressed: () async {
                     final analysis =
-                        await _aiService.getTechnicalAnalysis(_selectedSymbol);
+                    await _aiService.getTechnicalAnalysis(_selectedSymbol);
                     _showAnalysisDialog('Техник шинжилгээ', analysis);
                   },
                   child: Text('Техник шинжилгээ харах'),
@@ -377,7 +377,7 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               ...(analysis['keyPoints'] as List<dynamic>? ?? []).map(
-                (point) => Padding(
+                    (point) => Padding(
                   padding: EdgeInsets.only(left: 16, top: 4),
                   child: Text('• $point'),
                 ),
