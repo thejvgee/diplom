@@ -1,67 +1,30 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'dart:math' as math;
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-
 import 'api_key_service.dart';
-
-
 class GeminiService {
   static const String _basePrompt = '''
-Та бол хөрөнгө оруулагч, дэлхийн зах зээлд туршлагатай, өндөр мэргэшсэн санхүүгийн зөвлөх, хиймэл оюун ухааны туслах юм. Таны хариултууд байх ёстой:
-1. Мэргэжлийн, ойлгомжтой, товч
-2. Санхүүгийн бодит мэдлэг, одоогийн шилдэг туршлагад үндэслэсэн
-3. Холбогдох үед тодорхой жишээ, тоо, хувь хэмжээг оруул
-4. Эрсдлийн хүчин зүйлс болон зах зээлийн тогтворгүй байдлыг үргэлж анхаарч үзээрэй
-5. Мэдээлэл байгаа үед хэрэглэгчийн санхүүгийн байдалд тохируулсан
-6. Тодорхой, хэрэгжүүлэх боломжтой зөвлөмжөөр дуусга
-7. Энэ бол хиймэл оюун ухаанаас бий болсон зөвлөгөө гэдгийг товч тайлбар оруулаад томоохон шийдвэр гаргахын тулд санхүүгийн мэргэжилтнүүдтэй зөвлөлдөхийг зөвлөж байна.
-
-Таны мэргэжлийн гол чиглэлүүд:
-- Хөрөнгийн зах зээлийн шинжилгээ, хөрөнгө оруулалтын стратеги (урт болон богино хугацааны аль аль нь)
-- Монголын хөрөнгийн зах зээлийн чиг хандлага
-- Төсвийн ерөнхийлөн захирагчийг оновчтой болгох, төрөлжүүлэх, эрсдэлийг удирдах
-- Хувийн санхүү, төсөв, өрийн удирдлага
-- Тэтгэврийн төлөвлөлт, татварын хэмнэлттэй хөрөнгө оруулалт
-- Монголын хөрөнгийн зах зээлийн чиг хандлагын шинжилгээ, эдийн засгийн үзүүлэлтүүд
-- Өөр өөр хөрөнгө оруулалтын тээврийн хэрэгслийн татварын үр дагавар
-- Амьдралын янз бүрийн үе шатуудад зориулсан санхүүгийн төлөвлөлт
-
-Зөвлөгөө өгөхдөө:
-1. Асуултанд шууд, товч хариулт өгч эхэл
-2. Тодорхой тоо эсвэл хувь хэмжээгээр туслах дэлгэрэнгүй мэдээллийг өгнө үү
-3. Холбогдох зах зээлийн үзэл баримтлал эсвэл зарчмуудыг оруулах
-4. Боломжит эрсдэл болон өөр хувилбаруудын талаар ярилц
-5. 2-3 тодорхой, хэрэгжүүлэх боломжтой алхам эсвэл зөвлөмжөөр дуусга
-6. Олон зүйлийг жагсаахдаа тодорхой болгох үүднээс сумны цэгүүдийг ашигла
-
-зайлсхийх:
-- Тодорхойгүй, тодорхойгүй ерөнхий зөвлөгөө
-- Тайлбаргүй хэт техникийн хэллэг
-- Тодорхой өгөөж эсвэл баталгаатай үр дүнг амлаж байна
-- Эрсдэлт хүчин зүйлсийг үл тоомсорлох
-
-Таны өнгө аяс нь мэргэжлийн, гэхдээ харилцан ярианы шинж чанартай, мэдлэгтэй боловч хүртээмжтэй байх ёстой бөгөөд үргэлж практик, хэрэгжих боломжтой санхүүгийн удирдамж өгөхөд чиглэгдсэн байх ёстой.
+Та бол мэргэжлийн, туршлагатай хөрөнгө оруулагч, хиймэл оюун санхүүгийн зөвлөх.
+• Хариулт: товч, ойлгомжтой, жишээ, тоо, хувь хэмжээтэй.
+• Эрсдэл, зах зээлийн хэлбэлзлийг тусгах.
+• Хэрэглэгчийн нөхцөлд тааруулсан зөвлөгөө.
+• Томоохон шийдвэрийн өмнө мэргэжлийн зөвлөлдөхийг сануулах.
+Таны хөрөнгө оруулалтын дүн дээр үндэслэн хамгийн сайн 10 хувьцаанууд ийм бүтэцтэй буцаана:
+[SYMBOL]: [КОМПАНИЙН НЭР] - [МАШ ТОВЧ ШАЛТГААН]
 ''';
-
   late final String _fixedApiKey;
   late final String _backupApiKey;
-
   late GenerativeModel _model;
   final Connectivity _connectivity = Connectivity();
   int _errorCount = 0;
   static const int _maxErrorCount = 3;
   late String _currentApiKey;
   bool _usingBackupKey = false;
-
-  final List<Content> _conversationHistory = [];
-
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
-
+  final Content _promptContent = Content.text(_basePrompt);
   GeminiService._internal();
+  late final List<Content> _baseContents;
 
   Future<void> init() async {
     _fixedApiKey = await ApiKeyService.getGeminiApiKey();
@@ -71,11 +34,13 @@ class GeminiService {
       model: 'gemini-1.5-pro',
       apiKey: _currentApiKey,
       generationConfig: GenerationConfig(
-        temperature: 0.7,
-        topP: 0.9,
-        topK: 40,
+        temperature: 0.3,
+        topP: 0.7,
+        topK: 10,
+        maxOutputTokens: 150,
       ),
     );
+    _baseContents = [Content.text(_basePrompt)];
   }
 
   Future<bool> _checkConnectivity() async {
@@ -89,8 +54,13 @@ class GeminiService {
     try {
       _currentApiKey = _backupApiKey;
       final newModel = GenerativeModel(
-        model: 'gemini-pro',
+        model: 'gemini-1.5-pro',
         apiKey: _backupApiKey,
+        generationConfig: GenerationConfig(
+          temperature: 0.5,
+          topP: 0.8,
+          topK: 20,
+        ),
       );
       final testResponse = await newModel.generateContent([
         Content.text('Сайн уу!'),
@@ -116,12 +86,10 @@ class GeminiService {
       if (!hasConnectivity) {
         return "No internet connection. Please check your network settings and try again.";
       }
-
       final response = await _model.generateContent([
-        Content.text(_basePrompt),
+        ..._baseContents,
         Content.text('Сайн байна уу надад хөрөнгө оруулалтын зөвөлгөө хэрэгтэй байна.'),
       ]);
-
       if (response.text == null || response.text!.isEmpty) {
         return "Сайн уу! Би хөрөнгө оруулалтын хиймэл оюун зөвлөх байна. Би хөрөнгө оруулалтын стратеги, зах зээлийн шинжилгээ, мөн хувь хүний санхүүгийн шийдвэрүүдэд туслах боломжтой. Танд ямар мэдээлэл хэрэгтэй вэ?";
       }
@@ -134,29 +102,23 @@ class GeminiService {
       if (e.toString().contains('API key')) {
         bool switched = await _switchToBackupKey();
         if (switched) {
-          return await startChat(); // Retry with new key
+          return await startChat();
         }
       }
-
       if (e.toString().contains('No address associated with hostname')) {
         return "Unable to connect to the AI service. Please check your internet connection and try again.";
       } else if (e.toString().contains('Invalid API key')) {
         return "There was a problem with the AI service. Using backup service.";
       }
-
-      // Return a friendly message regardless of error
       return "Сайн уу! Би хөрөнгө оруулалтын зөвлөх AI байна. Өнөөдөр ямар хөрөнгө оруулалтын зөвөлгөө авах вэ?";
     }
   }
 
   Future<String> sendMessage(String message) async {
-    // Check if this is an investment amount query
     final RegExp investmentRegex = RegExp(r'(have|got|with)\s+\d+\s*(dollars|usd|\$|money|rupees|rs|k)?.*\b(invest|investing|investment|stock|stocks)\b|\b(where|how)\s+to\s+invest\s+\d+', caseSensitive: false);
-
     if (investmentRegex.hasMatch(message.toLowerCase())) {
       return await getInvestmentRecommendations(message);
     }
-
     if (_errorCount >= _maxErrorCount) {
       return _getMockResponse(message);
     }
@@ -165,31 +127,25 @@ class GeminiService {
       if (!hasConnectivity) {
         return "No internet connection. Please check your network settings and try again.";
       }
-
       final response = await _model.generateContent([
-        Content.text(_basePrompt),
+        ..._baseContents,
         Content.text(message),
       ]);
-
       if (response.text == null || response.text!.isEmpty) {
         return "Уучлаарай таны асуултанд хариулж чадсангүй. Асуултаа дахин бичээд үзээрэй.";
       }
-
-      // Reset error count on successful request
       _errorCount = 0;
       return response.text!;
     } catch (e) {
       print('Error processing message: $e');
       _errorCount++;
 
-      // Try switching to backup key if API key is invalid
       if (e.toString().contains('Invalid API key') && !_usingBackupKey) {
         bool switched = await _switchToBackupKey();
         if (switched) {
-          return await sendMessage(message); // Retry with new key
+          return await sendMessage(message);
         }
       }
-
       if (_errorCount >= _maxErrorCount) {
         return _getMockResponse(message);
       }
@@ -355,19 +311,37 @@ class GeminiService {
 
   Future<int> getPortfolioHealthScore(List<String> holdings) async {
     try {
-      // In a real app, you would send the holdings to Gemini for analysis
-      // For demo, we'll generate a random score between 60-95
-      await Future.delayed(Duration(milliseconds: 800));
-      return 60 + math.Random().nextInt(36);
+      final hasConnectivity = await _checkConnectivity();
+      if (!hasConnectivity) {
+        return 75;
+      }
+      final prompt = 'Дараах хөрөнгө оруулалтын багцын health score-д 0-100 хооронд өгнө үү: ${holdings.join(', ')}. Үнэлгээ нь төрөлжилт, эрсдэлийн өртөлт, одоогийн зах зээлийн нөхцөл зэрэг хүчин зүйлсийг харгалзан үзнэ. Зөвхөн тоон үнэлгээг буцаана уу.';
+      final response = await _model.generateContent([
+        ..._baseContents,
+        Content.text(prompt),
+      ]);
+      if (response.text == null || response.text!.isEmpty) {
+        return 50;
+      }
+      final score = int.tryParse(response.text!.trim()) ?? 50;
+      _errorCount = 0;
+      return score;
     } catch (e) {
-      return 75; // Default score on error
+      print('Error getting portfolio health score: $e');
+      _errorCount++;
+      if (e.toString().contains('Invalid API key') && !_usingBackupKey) {
+        bool switched = await _switchToBackupKey();
+        if (switched) {
+          return await getPortfolioHealthScore(holdings);
+        }
+      }
+      return 75;
     }
   }
 
   String _getMockResponse(String message) {
     message = message.toLowerCase();
 
-    // Check if this is an investment amount query that wasn't caught by the regex
     final RegExp investmentRegex = RegExp(r'\b(stock|invest|etf|fund)s?\b', caseSensitive: false);
     if (investmentRegex.hasMatch(message)) {
       return _getMockInvestmentRecommendations();
