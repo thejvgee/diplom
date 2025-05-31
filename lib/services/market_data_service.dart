@@ -17,19 +17,12 @@ class MarketDataService {
 
   Future<void> initialize() async {
     try {
-      // Start periodic data refresh - every 30 seconds
-      _refreshTimer?.cancel(); // Cancel existing timer if any
+      _refreshTimer?.cancel();
       _refreshTimer = Timer.periodic(Duration(seconds: 30), (_) async {
         _refreshMarketData();
       });
-
-      // Initial data fetch
       await _refreshMarketData();
-
-      // Subscribe to market data updates
       await subscribeToSymbol('btcusdt');
-
-      // Reset error flag if we get here
       _hasError = false;
     } catch (e) {
       _hasError = true;
@@ -40,24 +33,18 @@ class MarketDataService {
 
   Future<void> _refreshMarketData() async {
     try {
-      // Generate mock data for display purposes
       final mockData = _createMockMarketData();
-
       _dataStreamController.add(mockData);
       _lastSuccessfulData = mockData;
       print('Market data refreshed: ${mockData.keys.toList()}');
     } catch (e) {
       print('Error fetching market data: $e');
-
-      // If we have last successful data, use it as fallback
       if (_lastSuccessfulData.isNotEmpty) {
-        // Add a flag to indicate this is cached data
         _lastSuccessfulData['isCached'] = true;
         _lastSuccessfulData['cacheTime'] = DateTime.now().millisecondsSinceEpoch;
         _dataStreamController.add(_lastSuccessfulData);
         print('Using cached market data');
       } else {
-        // Create mock data as a last resort
         final mockData = _createMockMarketData();
         mockData['isMock'] = true;
         _dataStreamController.add(mockData);
@@ -67,7 +54,6 @@ class MarketDataService {
   }
 
   Map<String, dynamic> _createMockMarketData() {
-    // Create mock data to show something while TradingView loads
     return {
       'stocks': {
         'c': 147.56, // current price
@@ -84,7 +70,6 @@ class MarketDataService {
   }
 
   Future<Map<String, dynamic>> getStockDetails(String symbol) async {
-    // Return mock data - TradingView will handle actual data display
     return {
       'c': 158.4, // current price
       'h': 159.1, // high price
@@ -98,7 +83,6 @@ class MarketDataService {
   }
 
   Future<Map<String, dynamic>> getCryptoDetails(String symbol) async {
-    // Return mock data - TradingView will handle actual data display
     return {
       'c': [19823.45], // close prices
       'h': [20145.67], // high prices
@@ -111,14 +95,9 @@ class MarketDataService {
       'isMock': true
     };
   }
-
-  // Get market data for a specific symbol and timeframe
   Future<Map<String, dynamic>> getMarketData(String symbol, String timeframe, {bool useMockData = false}) async {
-    // Always return mock data - actual data will be displayed by TradingView widget
     return _getMockDataForTimeframe(symbol, timeframe);
   }
-
-  // Format candle data into a consistent format
   Map<String, dynamic> _formatCandleData(Map<String, dynamic> data) {
     return {
       'time': data['t'] != null ? (data['t'] as List).map((t) => t * 1000).toList() : [],
@@ -129,18 +108,12 @@ class MarketDataService {
       'volume': data['v'] ?? [],
     };
   }
-
-  // Check for network connectivity
   Future<bool> _checkConnectivity() async {
     var connectivityResult = await Connectivity().checkConnectivity();
     return connectivityResult != ConnectivityResult.none;
   }
-
-  // Generate mock data for different timeframes
   Map<String, dynamic> _getMockDataForTimeframe(String symbol, String timeframe) {
     final now = DateTime.now();
-
-    // Base price values for different symbols
     double basePrice;
     switch (symbol) {
       case 'AARD':
@@ -158,8 +131,6 @@ class MarketDataService {
       default:
         basePrice = 100.0;
     }
-
-    // Number of data points based on timeframe
     int dataPoints;
     switch (timeframe) {
       case '1D':
@@ -183,8 +154,6 @@ class MarketDataService {
       default:
         dataPoints = 30;        // Default to daily
     }
-
-    // Volatility factor based on timeframe
     double volatility;
     switch (timeframe) {
       case '1D':
@@ -208,8 +177,6 @@ class MarketDataService {
       default:
         volatility = 0.02;
     }
-
-    // Time interval in milliseconds
     int timeInterval;
     switch (timeframe) {
       case '1D':
@@ -234,13 +201,10 @@ class MarketDataService {
         timeInterval = Duration(days: 1).inMilliseconds;
     }
 
-    // Generate time points
     final times = List<int>.generate(
         dataPoints,
             (i) => now.subtract(Duration(milliseconds: (dataPoints - 1 - i) * timeInterval)).millisecondsSinceEpoch
     );
-
-    // Generate price data with some randomness and trending
     double currentPrice = basePrice;
     final trend = (now.millisecondsSinceEpoch % 2 == 0) ? 1.0 : -1.0;
     final trendStrength = volatility * 10;
@@ -252,7 +216,6 @@ class MarketDataService {
     final volumes = <double>[];
 
     for (int i = 0; i < dataPoints; i++) {
-      // Generate random changes with trend
       final randomFactor = (i * 17 % 100) / 100.0 - 0.5;
       final trendFactor = trend * trendStrength * (i / dataPoints);
       final dayChange = currentPrice * volatility * randomFactor + currentPrice * trendFactor;
@@ -284,7 +247,6 @@ class MarketDataService {
   }
 
   Future<List<Map<String, dynamic>>> getMarketNews() async {
-    // Return mock news items - no more API calls
     return [
       {
         'title': 'Apple шинэ iPhone-оо зарлалаа',
@@ -333,7 +295,6 @@ class MarketDataService {
 
   Future<void> subscribeToSymbol(String symbol) async {
     try {
-      // Close existing connection if any
       _webSocketChannel?.sink.close();
 
       // Only connect to Binance WebSocket for crypto symbols
@@ -346,7 +307,6 @@ class MarketDataService {
         _webSocketChannel!.stream.listen(
               (dynamic data) {
             try {
-              // Parse the data
               Map<String, dynamic> tradeData;
               if (data is String) {
                 tradeData = json.decode(data);
@@ -355,8 +315,6 @@ class MarketDataService {
               } else {
                 throw Exception('Unexpected data type: ${data.runtimeType}');
               }
-
-              // Add to the data stream
               _dataStreamController.add(tradeData);
               print('Received WebSocket data for $symbol');
             } catch (e) {
@@ -373,14 +331,12 @@ class MarketDataService {
 
         print('Successfully subscribed to $symbol');
       } else {
-        // For stock symbols, just update with mock data
         final mockData = _createMockMarketData();
         _dataStreamController.add(mockData);
       }
     } catch (e) {
       print('Error subscribing to symbol: $e');
 
-      // Use mock data on error
       final mockData = _createMockMarketData();
       mockData['isMock'] = true;
       _dataStreamController.add(mockData);
