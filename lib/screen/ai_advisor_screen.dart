@@ -72,7 +72,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
           _isLoading = false;
           _hasError = true;
           _errorMessage = 'Could not load data: ${e.toString()}';
-          // Use default data
           _stockRecommendations = _getDefaultStockRecommendations();
           _financialTips = _getDefaultFinancialTips();
           _marketAlerts = _getDefaultMarketAlerts();
@@ -293,7 +292,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
         child: ListView(
           padding: EdgeInsets.all(16),
           children: [
-            // Portfolio Health Card
             Card(
               elevation: 4,
               child: Padding(
@@ -344,12 +342,12 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                             children: [
                               Text(
                                 _portfolioHealthScore >= 80
-                                    ? 'Excellent'
+                                    ? 'Маш сайн'
                                     : _portfolioHealthScore >= 70
-                                    ? 'Good'
+                                    ? 'Сайн'
                                     : _portfolioHealthScore >= 60
-                                    ? 'Fair'
-                                    : 'Needs Attention',
+                                    ? 'Дундаж'
+                                    : 'Анхаарал хэрэгтэй',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
@@ -376,10 +374,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                 ),
               ),
             ),
-
             SizedBox(height: 24),
-
-            // Stock Recommendations
             Text(
               'Санал болгож буй хувьцаа',
               style: Theme.of(context).textTheme.titleLarge,
@@ -466,12 +461,8 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                   ),
                   isThreeLine: true,
                 ),
-              ))
-                  .toList(),
-
+              )).toList(),
             SizedBox(height: 24),
-
-            // Market Alerts
             Text(
               'Зах зээлийн сануулга',
               style: Theme.of(context).textTheme.titleLarge,
@@ -525,8 +516,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
               )).toList(),
 
             SizedBox(height: 24),
-
-            // Financial Tips
             Text(
               'Санхүүгийн зөвөлгөө',
               style: Theme.of(context).textTheme.titleLarge,
@@ -582,8 +571,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                 ),
               )).toList(),
             SizedBox(height: 24),
-
-            // Chat button
             ElevatedButton.icon(
               onPressed: () => Navigator.push(
                 context,
