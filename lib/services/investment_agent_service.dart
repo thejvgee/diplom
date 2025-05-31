@@ -43,21 +43,16 @@ class InvestmentAgentService {
   }) async {
     try {
       if (!_isModelInitialized || _model == null) {
-        // Display a user-friendly message when no API key is set
         if (apiKey.isEmpty) {
           return 'To use the AI investment agent, please set up your Gemini API key in Settings. '
                  'You can get a free API key from https://ai.google.dev/';
         }
-        
-        // Try to initialize again
-        _initializeModel();
+                _initializeModel();
         if (!_isModelInitialized || _model == null) {
           return 'Unable to initialize AI model. Please check your API key in Settings.';
         }
       }
-      
-      // Prepare context for the model with a specific prompt
-      final context = '''
+            final context = '''
 As an investment advisor, analyze the following information and provide advice:
 
 User portfolio: ${portfolioData.toString()}
@@ -67,20 +62,15 @@ User question: $userQuestion
 Provide a concise, informed response focused on answering the user's question based on their portfolio and current market trends.
 ''';
       
-      // Generate content using Gemini
       final content = [Content.text(context)];
-      final response = await _model!.generateContent(content);
-      
-      // Extract and return the response text
+      final response = await _model!.generateContent(content);      
       if (response.text == null || response.text!.isEmpty) {
         return 'Sorry, I couldn\'t generate a response. Please try again with a different question.';
       }
       
       return response.text!;
     } catch (e) {
-      debugPrint('Error generating investment advice: $e');
-      
-      // Return a more specific error message based on the error type
+      debugPrint('Error generating investment advice: $e');  
       if (e.toString().contains('API key')) {
         return 'Invalid API key. Please update your API key in Settings.';
       } else if (e.toString().contains('network')) {
@@ -93,7 +83,6 @@ Provide a concise, informed response focused on answering the user's question ba
     }
   }
   
-  /// Enhanced portfolio suggestions with transaction history and risk tolerance
   Future<Map<String, dynamic>> getEnhancedPortfolioSuggestions({
     required List<Holding> holdings,
     required double cashBalance,
@@ -103,7 +92,6 @@ Provide a concise, informed response focused on answering the user's question ba
   }) async {
     try {
       if (!_isModelInitialized || _model == null) {
-        // Display a user-friendly message when no API key is set
         if (apiKey.isEmpty) {
           return {
             'error': 'To use the AI investment agent, please set up your Gemini API key in Settings.',
@@ -111,7 +99,6 @@ Provide a concise, informed response focused on answering the user's question ba
           };
         }
         
-        // Try to initialize again
         _initializeModel();
         if (!_isModelInitialized || _model == null) {
           return {
@@ -121,7 +108,6 @@ Provide a concise, informed response focused on answering the user's question ba
         }
       }
       
-      // Format holdings for the prompt
       final formattedHoldings = holdings.map((holding) => {
         'symbol': holding.symbol,
         'quantity': holding.quantity,
@@ -129,7 +115,6 @@ Provide a concise, informed response focused on answering the user's question ba
         'totalCost': holding.totalCost,
       }).toList();
       
-      // Format transaction history for the prompt
       final formattedTransactions = transactions.map((transaction) => {
         'symbol': transaction.symbol,
         'action': transaction.action,
@@ -139,7 +124,6 @@ Provide a concise, informed response focused on answering the user's question ba
         'timestamp': transaction.timestamp.toIso8601String(),
       }).toList();
       
-      // Prepare the context with detailed portfolio information
       final context = '''
 You are a professional portfolio manager. Analyze this portfolio data and provide actionable suggestions:
 
@@ -184,11 +168,8 @@ $riskTolerance
    }
 ''';
       
-      // Generate content using Gemini
       final content = [Content.text(context)];
-      final response = await _model!.generateContent(content);
-      
-      // Extract and process the response
+      final response = await _model!.generateContent(content);      
       if (response.text == null || response.text!.isEmpty) {
         return {
           'error': 'Could not generate portfolio suggestions. Please try again later.',
@@ -196,10 +177,8 @@ $riskTolerance
         };
       }
       
-      // Extract JSON from the response
       String jsonText = response.text!;
       
-      // Some basic cleanup to extract JSON if it's wrapped in code blocks
       if (jsonText.contains('```json')) {
         jsonText = jsonText.split('```json')[1].split('```')[0].trim();
       } else if (jsonText.contains('```')) {
@@ -207,7 +186,6 @@ $riskTolerance
       }
       
       try {
-        // Parse the JSON response
         final Map<String, dynamic> parsedResponse = json.decode(jsonText);
         return parsedResponse;
       } catch (e) {
@@ -234,20 +212,15 @@ $riskTolerance
   }) async {
     try {
       if (!_isModelInitialized || _model == null) {
-        // Display a user-friendly message when no API key is set
         if (apiKey.isEmpty) {
-          // Return an empty list but caller should check isModelInitialized
           return [];
-        }
-        
-        // Try to initialize again
+        }        
         _initializeModel();
         if (!_isModelInitialized || _model == null) {
           return [];
         }
       }
       
-      // Prepare context for the model
       final context = '''
 Current Portfolio: ${currentPortfolio.toString()}
 User Preferences: ${userPreferences.toString()}
@@ -255,15 +228,10 @@ Market Data: ${marketData.toString()}
 Generate portfolio optimization suggestions in JSON format.
 ''';
       
-      // Generate content using Gemini
       final content = [Content.text(context)];
-      final response = await _model!.generateContent(content);
-      
-      // Process and parse the response
+      final response = await _model!.generateContent(content);      
       if (response.text != null) {
         try {
-          // This is a simplified version. In practice, you would need a more robust parser
-          // to extract and validate the JSON structure from the AI response
           final suggestions = [
             {'asset': 'Example Asset', 'action': 'Buy', 'reason': 'Based on market trends'},
             {'asset': 'Example Asset 2', 'action': 'Sell', 'reason': 'Overvalued based on metrics'}
