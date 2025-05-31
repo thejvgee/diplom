@@ -40,55 +40,6 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyD8y8RVanTS8SBaazxnATE5Ea9S17pXvKM',
-    appId: '1:464701040005:web:8b1bbfc349926d481a10ec',
-    messagingSenderId: '464701040005',
-    projectId: 'diplom-23056',
-    authDomain: 'diplom-23056.firebaseapp.com',
-    databaseURL: 'https://diplom-23056-default-rtdb.firebaseio.com',
-    storageBucket: 'diplom-23056.firebasestorage.app',
-    measurementId: 'G-53YZV8218V',
-  );
-
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCJXgVmPFF5Hxqqy29cuUudzhwnKkZxCyA',
-    appId: '1:464701040005:android:52cfd4c10c6f83b11a10ec',
-    messagingSenderId: '464701040005',
-    projectId: 'diplom-23056',
-    databaseURL: 'https://diplom-23056-default-rtdb.firebaseio.com',
-    storageBucket: 'diplom-23056.firebasestorage.app',
-  );
-
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAnCethkf75G5keoANm3GKLJb4Yh2Bm9P0',
-    appId: '1:464701040005:ios:f4c2aed6a31ba9e11a10ec',
-    messagingSenderId: '464701040005',
-    projectId: 'diplom-23056',
-    databaseURL: 'https://diplom-23056-default-rtdb.firebaseio.com',
-    storageBucket: 'diplom-23056.firebasestorage.app',
-    iosBundleId: 'com.example.jvgeeDiplom',
-  );
-
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAnCethkf75G5keoANm3GKLJb4Yh2Bm9P0',
-    appId: '1:464701040005:ios:f4c2aed6a31ba9e11a10ec',
-    messagingSenderId: '464701040005',
-    projectId: 'diplom-23056',
-    databaseURL: 'https://diplom-23056-default-rtdb.firebaseio.com',
-    storageBucket: 'diplom-23056.firebasestorage.app',
-    iosBundleId: 'com.example.jvgeeDiplom',
-  );
-
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyD8y8RVanTS8SBaazxnATE5Ea9S17pXvKM',
-    appId: '1:464701040005:web:81354736644084831a10ec',
-    messagingSenderId: '464701040005',
-    projectId: 'diplom-23056',
-    authDomain: 'diplom-23056.firebaseapp.com',
-    databaseURL: 'https://diplom-23056-default-rtdb.firebaseio.com',
-    storageBucket: 'diplom-23056.firebasestorage.app',
-    measurementId: 'G-FGX1GWMXM7',
-  );
+  
 
 }
