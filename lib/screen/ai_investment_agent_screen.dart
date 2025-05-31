@@ -15,7 +15,6 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
   bool _showAdviceSection = false;
   bool _showSuggestionsSection = false;
 
-  // Mock data for demonstration - in a real app, you would get this from a portfolio service
   final Map<String, dynamic> _portfolioData = {
     'stocks': [
       {'symbol': 'AARD', 'shares': 10, 'avgPrice': 2474.00},
@@ -26,14 +25,12 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
     'totalValue': 12500.00,
   };
 
-  // Mock market trends data
   final List<Map<String, dynamic>> _marketTrends = [
     {'sector': 'Technology', 'trend': 'Upward', 'confidence': 0.8},
     {'sector': 'Healthcare', 'trend': 'Stable', 'confidence': 0.6},
     {'sector': 'Energy', 'trend': 'Downward', 'confidence': 0.7},
   ];
 
-  // Mock user preferences
   final Map<String, dynamic> _userPreferences = {
     'riskTolerance': 'Moderate',
     'investmentHorizon': 'Long-term',
@@ -122,7 +119,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
             SizedBox(height: 16),
             Text(
               'To use the AI Investment Agent, you need to provide a Google Gemini API key. '
-              'You can get a free API key from the Google AI Studio website.',
+                  'You can get a free API key from the Google AI Studio website.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16),
             ),
@@ -232,7 +229,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                   Text(
                     'Top Holdings',
                     style:
-                        TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+                    TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8.0),
                   // Holdings list with dividers
@@ -312,7 +309,6 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with gradient background
           Container(
             padding: EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -356,12 +352,12 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: _questionController.text.isNotEmpty
                         ? [
-                            BoxShadow(
-                              color: colorScheme.primary.withOpacity(0.2),
-                              blurRadius: 8,
-                              offset: Offset(0, 2),
-                            )
-                          ]
+                      BoxShadow(
+                        color: colorScheme.primary.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      )
+                    ]
                         : [],
                   ),
                   child: TextField(
@@ -371,12 +367,12 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                       helperText: 'Ask any investment-related question',
                       suffixIcon: _questionController.text.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.clear),
-                              onPressed: () {
-                                _questionController.clear();
-                                setState(() {});
-                              },
-                            )
+                        icon: Icon(Icons.clear),
+                        onPressed: () {
+                          _questionController.clear();
+                          setState(() {});
+                        },
+                      )
                           : null,
                     ),
                     onChanged: (_) => setState(() {}),
@@ -390,28 +386,28 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                   child: ElevatedButton.icon(
                     onPressed: _questionController.text.isNotEmpty
                         ? () {
-                            FocusScope.of(context).unfocus(); // Hide keyboard
-                            provider.getInvestmentAdvice(
-                              userQuestion: _questionController.text,
-                              portfolioData: _portfolioData,
-                              marketTrends: _marketTrends,
-                            );
-                            setState(() {
-                              _showAdviceSection = true;
-                              _showSuggestionsSection = false;
-                            });
-                          }
+                      FocusScope.of(context).unfocus(); // Hide keyboard
+                      provider.getInvestmentAdvice(
+                        userQuestion: _questionController.text,
+                        portfolioData: _portfolioData,
+                        marketTrends: _marketTrends,
+                      );
+                      setState(() {
+                        _showAdviceSection = true;
+                        _showSuggestionsSection = false;
+                      });
+                    }
                         : null, // Disable if text is empty
                     icon: provider.isLoading
                         ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  colorScheme.onPrimary),
-                            ),
-                          )
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            colorScheme.onPrimary),
+                      ),
+                    )
                         : Icon(Icons.send),
                     label: Text(provider.isLoading
                         ? 'Getting Зөвөлгөө...'
@@ -464,15 +460,15 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                   icon: Icon(Icons.refresh,
                       color: colorScheme.onTertiaryContainer),
                   onPressed:
-                      _questionController.text.isNotEmpty && !provider.isLoading
-                          ? () {
-                              provider.getInvestmentAdvice(
-                                userQuestion: _questionController.text,
-                                portfolioData: _portfolioData,
-                                marketTrends: _marketTrends,
-                              );
-                            }
-                          : null,
+                  _questionController.text.isNotEmpty && !provider.isLoading
+                      ? () {
+                    provider.getInvestmentAdvice(
+                      userQuestion: _questionController.text,
+                      portfolioData: _portfolioData,
+                      marketTrends: _marketTrends,
+                    );
+                  }
+                      : null,
                   tooltip: 'Зөвөлгөө дахин боловсруулах',
                 ),
               ],
@@ -546,26 +542,26 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
           onPressed: provider.isLoading
               ? null
               : () {
-                  provider.getPortfolioSuggestions(
-                    currentPortfolio: _portfolioData,
-                    userPreferences: _userPreferences,
-                    marketData: _marketTrends,
-                  );
-                  setState(() {
-                    _showSuggestionsSection = true;
-                    _showAdviceSection = false;
-                  });
-                },
+            provider.getPortfolioSuggestions(
+              currentPortfolio: _portfolioData,
+              userPreferences: _userPreferences,
+              marketData: _marketTrends,
+            );
+            setState(() {
+              _showSuggestionsSection = true;
+              _showAdviceSection = false;
+            });
+          },
           icon: provider.isLoading
               ? SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
-                  ),
-                )
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor:
+              AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+            ),
+          )
               : Icon(Icons.auto_awesome),
           label: Text(provider.isLoading
               ? 'Боловсруулж байна...'
@@ -699,7 +695,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    CrossAxisAlignment.start,
                                     children: [
                                       // Asset and action
                                       Row(
@@ -711,7 +707,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                                               color: colorScheme
                                                   .secondaryContainer,
                                               borderRadius:
-                                                  BorderRadius.circular(4.0),
+                                              BorderRadius.circular(4.0),
                                             ),
                                             child: Text(
                                               suggestion['asset'],
@@ -806,7 +802,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
             Padding(
               padding: EdgeInsets.symmetric(vertical: 12.0),
               child:
-                  Divider(color: colorScheme.error.withOpacity(0.3), height: 1),
+              Divider(color: colorScheme.error.withOpacity(0.3), height: 1),
             ),
             // Error message
             Container(
@@ -843,7 +839,7 @@ class _AIInvestmentAgentScreenState extends State<AIInvestmentAgentScreen> {
                   onPressed: () {
                     if (_questionController.text.isNotEmpty) {
                       Provider.of<InvestmentAgentProvider>(context,
-                              listen: false)
+                          listen: false)
                           .getInvestmentAdvice(
                         userQuestion: _questionController.text,
                         portfolioData: _portfolioData,

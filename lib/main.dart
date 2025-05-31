@@ -1,6 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:jvgee_diplom/screen/forgot_password_screen.dart';
+import 'package:jvgee_diplom/services/gemini_service.dart';
 import 'package:provider/provider.dart';
 import 'screen/login_screen.dart'; // Import all screen files
 import 'screen/home_screen.dart';
@@ -18,11 +20,9 @@ import 'screen/portfolio_suggestions_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp();
-  // Get the Gemini API key from secure storage
   final geminiApiKey = await ApiKeyService.getGeminiApiKey();
-
-  // Only validate if the key is not empty
   bool isValidApiKey = false;
   if (geminiApiKey.isNotEmpty) {
     isValidApiKey = await ApiKeyService.validateGeminiApiKey(geminiApiKey);
@@ -32,7 +32,7 @@ void main() async {
   } else {
     print('No Gemini API key provided. AI features will not be available.');
   }
-
+  await GeminiService().init();
   // Create the market data service
   final marketDataService = MarketDataService();
   await marketDataService.initialize();
@@ -59,7 +59,7 @@ void main() async {
         ),
         // Add market data service provider
         Provider<MarketDataService>.value(
-           value: marketDataService,
+          value: marketDataService,
         ),
         // Add portfolio provider
         ChangeNotifierProxyProvider<MarketDataService, PortfolioProvider>(
@@ -163,7 +163,7 @@ class AppTheme extends StatelessWidget {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
           elevation: MaterialStateProperty.resolveWith<double>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) return 0;
               if (states.contains(MaterialState.hovered)) return 2;
               return 1;
@@ -177,7 +177,7 @@ class AppTheme extends StatelessWidget {
           ),
           animationDuration: const Duration(milliseconds: 200),
           overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return Colors.white.withOpacity(0.1);
               }
@@ -207,7 +207,7 @@ class AppTheme extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           side: MaterialStateProperty.resolveWith<BorderSide>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return BorderSide(color: colorScheme.primary, width: 2);
               }
@@ -406,7 +406,7 @@ class AppTheme extends StatelessWidget {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
           elevation: MaterialStateProperty.resolveWith<double>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) return 0;
               if (states.contains(MaterialState.hovered)) return 2;
               return 1;
@@ -420,7 +420,7 @@ class AppTheme extends StatelessWidget {
           ),
           animationDuration: const Duration(milliseconds: 200),
           overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return Colors.black.withOpacity(0.1);
               }
@@ -450,7 +450,7 @@ class AppTheme extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           side: MaterialStateProperty.resolveWith<BorderSide>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return BorderSide(color: colorScheme.primary, width: 2);
               }

@@ -320,65 +320,65 @@ class _MarketScreenState extends State<MarketScreen>
 
         // S&P 500 chart
         if (index == tradableStocks.length + 1) {
-          return Container(
-            height: 350,
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Card(
-              elevation: 4,
-              child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'S&P 500',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    SizedBox(height: 8),
-                    Expanded(
-                      child: TradingViewMobileWidget(
-                        symbol: 'SPY',
-                        isStockChart: true,
-                        useMockData: isMockData,
-                        liveData: liveMarketData,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
+          // return Container(
+          //   height: 350,
+          //   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          //   child: Card(
+          //     elevation: 4,
+          //     child: Padding(
+          //       padding: EdgeInsets.all(8.0),
+          //       child: Column(
+          //         crossAxisAlignment: CrossAxisAlignment.start,
+          //         children: [
+          //           Text(
+          //             'S&P 500',
+          //             style: Theme.of(context).textTheme.titleMedium,
+          //           ),
+          //           SizedBox(height: 8),
+          //           Expanded(
+          //             child: TradingViewMobileWidget(
+          //               symbol: 'SPY',
+          //               isStockChart: true,
+          //               useMockData: isMockData,
+          //               liveData: liveMarketData,
+          //             ),
+          //           ),
+          //         ],
+          //       ),
+          //     ),
+          //   ),
+          // );
         }
 
         // Apple chart
-        return Container(
-          height: 350,
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Card(
-            elevation: 4,
-            child: Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'АПУ ХК.',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  SizedBox(height: 8),
-                  Expanded(
-                    child: TradingViewMobileWidget(
-                      symbol: 'APU',
-                      isStockChart: true,
-                      useMockData: isMockData,
-                      liveData: liveMarketData,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
+        // return Container(
+        //   height: 350,
+        //   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        //   child: Card(
+        //     elevation: 4,
+        //     child: Padding(
+        //       padding: EdgeInsets.all(8.0),
+        //       child: Column(
+        //         crossAxisAlignment: CrossAxisAlignment.start,
+        //         children: [
+        //           Text(
+        //             'АПУ ХК.',
+        //             style: Theme.of(context).textTheme.titleMedium,
+        //           ),
+        //           SizedBox(height: 8),
+        //           Expanded(
+        //             child: TradingViewMobileWidget(
+        //               symbol: 'APU',
+        //               isStockChart: true,
+        //               useMockData: isMockData,
+        //               liveData: liveMarketData,
+        //             ),
+        //           ),
+        //         ],
+        //       ),
+        //     ),
+        //   ),
+        // );
       },
     );
   }

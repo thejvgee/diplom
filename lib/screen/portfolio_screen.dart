@@ -78,7 +78,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
           double totalValue = snapshot.data ?? 0.0;
           double investedValue = totalValue - portfolioProvider.cashBalance;
           double investedPercentage =
-              totalValue > 0 ? (investedValue / totalValue) * 100 : 0;
+          totalValue > 0 ? (investedValue / totalValue) * 100 : 0;
           double cashPercentage = totalValue > 0
               ? (portfolioProvider.cashBalance / totalValue) * 100
               : 0;
@@ -100,7 +100,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
 
             overallGainLoss = investedValue - totalCost;
             overallGainLossPercent =
-                totalCost > 0 ? (overallGainLoss / totalCost) * 100 : 0;
+            totalCost > 0 ? (overallGainLoss / totalCost) * 100 : 0;
           }
 
           // Find top performers and losers
@@ -115,11 +115,11 @@ class _PortfolioScreenState extends State<PortfolioScreen>
 
           List<Holding> topPerformers = sortedHoldings.take(3).toList();
           List<Holding> worstPerformers =
-              sortedHoldings.reversed.take(3).toList();
+          sortedHoldings.reversed.take(3).toList();
 
           return ListView(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             children: [
               // Portfolio summary KPIs
               _buildPortfolioHeader(totalValue, portfolioProvider,
@@ -205,7 +205,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 ),
                 SizedBox(height: 8),
                 ...topPerformers.map(
-                    (holding) => _buildPerformerItem(holding, isGainer: true)),
+                        (holding) => _buildPerformerItem(holding, isGainer: true)),
                 SizedBox(height: 24),
               ],
 
@@ -217,7 +217,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 ),
                 SizedBox(height: 8),
                 ...worstPerformers.map(
-                    (holding) => _buildPerformerItem(holding, isGainer: false)),
+                        (holding) => _buildPerformerItem(holding, isGainer: false)),
                 SizedBox(height: 24),
               ],
 
@@ -277,11 +277,11 @@ class _PortfolioScreenState extends State<PortfolioScreen>
 
   // Enhanced Portfolio Header
   Widget _buildPortfolioHeader(
-    double totalValue,
-    PortfolioProvider portfolioProvider,
-    double overallGainLoss,
-    double overallGainLossPercent,
-  ) {
+      double totalValue,
+      PortfolioProvider portfolioProvider,
+      double overallGainLoss,
+      double overallGainLossPercent,
+      ) {
     bool isPositive = overallGainLossPercent >= 0;
 
     return Container(
@@ -667,7 +667,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 // For demo purposes, generate some mock history points
                 final List<FlSpot> spots = List.generate(
                   7,
-                  (index) => FlSpot(
+                      (index) => FlSpot(
                     index.toDouble(),
                     totalValue * (0.95 + (index / 50)), // Create some variation
                   ),
@@ -730,9 +730,9 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                         ),
                       ),
                       rightTitles:
-                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       topTitles:
-                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
                     gridData: FlGridData(
                       drawVerticalLine: true,
@@ -795,7 +795,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 range,
                 style: TextStyle(
                   color:
-                      selectedTimeRange == range ? Colors.white : Colors.black,
+                  selectedTimeRange == range ? Colors.white : Colors.black,
                   fontWeight: selectedTimeRange == range
                       ? FontWeight.bold
                       : FontWeight.normal,
@@ -987,7 +987,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               children: [
                 CircleAvatar(
                   backgroundColor:
-                      Theme.of(context).primaryColor.withOpacity(0.1),
+                  Theme.of(context).primaryColor.withOpacity(0.1),
                   child: Text(
                     holding.symbol[0],
                     style: TextStyle(
@@ -1074,7 +1074,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               final amount = double.tryParse(amountController.text);
               if (amount != null && amount > 0) {
                 final portfolioProvider =
-                    Provider.of<PortfolioProvider>(context, listen: false);
+                Provider.of<PortfolioProvider>(context, listen: false);
                 portfolioProvider.addCash(amount);
                 Navigator.of(ctx).pop();
 
@@ -1088,7 +1088,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Please enter a valid amount'),
+                    content: Text('Бүхэл тоо оруулна уу!'),
                     backgroundColor: Colors.black,
                   ),
                 );

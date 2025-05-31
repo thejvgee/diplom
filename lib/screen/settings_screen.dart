@@ -97,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.clear();
 
       // Navigate to login screen and remove all previous routes
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Гарахад алдаа гарлаа: $e')),
@@ -859,25 +859,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     elevation: 2,
                     child: Padding(
                       padding: EdgeInsets.all(16.0),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _logout,
-                          icon: Icon(Icons.logout),
-                          label: Text('Гарах'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16.0),
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -936,6 +917,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       icon: Icon(Icons.info_outline),
                       label: Text('About this app'),
+                    ),
+                  ),
+                  SizedBox(height: 16.0),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _logout,
+                          icon: Icon(Icons.logout),
+                          label: Text('Гарах'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
