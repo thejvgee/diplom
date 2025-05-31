@@ -44,8 +44,6 @@ Consider:
     try {
       final apiKey = await storage.read(key: 'API key');
       if (apiKey == null) throw Exception('API key not found');
-
-      // Get market data from Cruxor
       final response = await http.get(
         Uri.parse('$_baseUrl/market/recommendations'),
         headers: {
@@ -57,10 +55,7 @@ Consider:
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch market data');
       }
-
       final marketData = json.decode(response.body);
-
-      // Generate AI recommendations
       final prompt = '''
 Based on the following parameters, provide stock recommendations:
 Risk Level: $riskLevel
@@ -89,8 +84,6 @@ Provide:
     try {
       final apiKey = await storage.read(key: 'cruxor_api_key');
       if (apiKey == null) throw Exception('API key not found');
-
-      // Get news and social media data
       final response = await http.get(
         Uri.parse('$_baseUrl/sentiment/$symbol'),
         headers: {
@@ -102,10 +95,7 @@ Provide:
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch sentiment data');
       }
-
       final sentimentData = json.decode(response.body);
-
-      // Generate AI analysis
       final prompt = '''
 Analyze the following market sentiment data for $symbol:
 ${json.encode(sentimentData)}
@@ -130,8 +120,6 @@ Provide:
     try {
       final apiKey = await storage.read(key: 'cruxor_api_key');
       if (apiKey == null) throw Exception('API key not found');
-
-      // Get technical indicators
       final response = await http.get(
         Uri.parse('$_baseUrl/technical/$symbol'),
         headers: {
@@ -143,10 +131,7 @@ Provide:
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch technical data');
       }
-
       final technicalData = json.decode(response.body);
-
-      // Generate AI analysis
       final prompt = '''
 Analyze the following technical indicators for $symbol:
 ${json.encode(technicalData)}
@@ -171,8 +156,6 @@ Provide:
     try {
       final apiKey = await storage.read(key: 'cruxor_api_key');
       if (apiKey == null) throw Exception('API key not found');
-
-      // Get fundamental data
       final response = await http.get(
         Uri.parse('$_baseUrl/fundamental/$symbol'),
         headers: {
@@ -184,10 +167,7 @@ Provide:
       if (response.statusCode != 200) {
         throw Exception('Failed to fetch fundamental data');
       }
-
       final fundamentalData = json.decode(response.body);
-
-      // Generate AI analysis
       final prompt = '''
 Analyze the following fundamental data for $symbol:
 ${json.encode(fundamentalData)}
