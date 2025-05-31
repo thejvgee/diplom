@@ -36,16 +36,11 @@ class PortfolioProvider extends ChangeNotifier {
     try {
       _setLoading(true);
       _clearError();
-      
-      final prefs = await SharedPreferences.getInstance();
-      
-      // Load transactions
+      final prefs = await SharedPreferences.getInstance();      
       final transactionsJson = prefs.getString(_transactionsKey);
       if (transactionsJson != null) {
         _transactions = Transaction.listFromJson(transactionsJson);
-      }
-      
-      // Load cash balance
+      }      
       final cashBalance = prefs.getDouble(_cashBalanceKey);
       if (cashBalance != null) {
         _cashBalance = cashBalance;
@@ -88,13 +83,9 @@ class PortfolioProvider extends ChangeNotifier {
     }
     
     try {
-      _cashBalance -= totalCost;
-      
-      // Check if the user already owns this stock
+      _cashBalance -= totalCost;      
       final existingHoldingIndex = _holdings.indexWhere((h) => h.symbol == symbol);
-      
       if (existingHoldingIndex >= 0) {
-        // Update existing holding
         final existingHolding = _holdings[existingHoldingIndex];
         final newQuantity = existingHolding.quantity + quantity;
         final newAverageCost = ((existingHolding.totalCost + totalCost) / newQuantity);
@@ -103,7 +94,6 @@ class PortfolioProvider extends ChangeNotifier {
           averageCost: newAverageCost,
         );
       } else {
-        // Add new holding
         _holdings.add(Holding(
           symbol: symbol,
           quantity: quantity,
@@ -112,7 +102,6 @@ class PortfolioProvider extends ChangeNotifier {
         ));
       }
       
-      // Record transaction
       final transaction = Transaction(
         symbol: symbol,
         action: 'buy',
@@ -121,60 +110,41 @@ class PortfolioProvider extends ChangeNotifier {
         totalAmount: totalCost,
         timestamp: DateTime.now(),
       );
-      
-      _transactions.add(transaction);
-      
-      // Save data to storage
+      _transactions.add(transaction);      
       await _saveData();
-      
       notifyListeners();
       return true;
     } catch (e) {
       print('Error buying stock: $e');
       return false;
     }
-  }
-  
-  // Sell stock
+  }  
   Future<bool> sellStock(String symbol, double quantity, double price) async {
     if (quantity <= 0 || price <= 0) {
       return false;
-    }
-    
-    // Find the holding
+    }    
     final existingHoldingIndex = _holdings.indexWhere((h) => h.symbol == symbol);
     
     if (existingHoldingIndex < 0) {
-      return false; // User doesn't own this stock
+      return false;
     }
-    
-    final existingHolding = _holdings[existingHoldingIndex];
-    
-    // Check if user has enough shares to sell
+    final existingHolding = _holdings[existingHoldingIndex];    
     if (existingHolding.quantity < quantity) {
       return false;
     }
     
     try {
       final totalSaleAmount = quantity * price;
-      
-      // Update cash balance
       _cashBalance += totalSaleAmount;
-      
-      // Update holdings
       final remainingQuantity = existingHolding.quantity - quantity;
-      
       if (remainingQuantity > 0) {
-        // Update the holding with reduced quantity
         _holdings[existingHoldingIndex] = existingHolding.copyWith(
           quantity: remainingQuantity,
         );
       } else {
-        // Remove the holding if no shares left
         _holdings.removeAt(existingHoldingIndex);
       }
       
-      // Record transaction
       final transaction = Transaction(
         symbol: symbol,
         action: 'sell',
@@ -186,7 +156,6 @@ class PortfolioProvider extends ChangeNotifier {
       
       _transactions.add(transaction);
       
-      // Save data to storage
       await _saveData();
       
       notifyListeners();
@@ -197,14 +166,11 @@ class PortfolioProvider extends ChangeNotifier {
     }
   }
   
-  // Add cash to account
   Future<void> addCash(double amount) async {
     if (amount <= 0) return;
     
     try {
-      _cashBalance += amount;
-      
-      // Record transaction
+      _cashBalance += amount;      
       final transaction = Transaction(
         symbol: 'CASH',
         action: 'deposit',
@@ -213,41 +179,30 @@ class PortfolioProvider extends ChangeNotifier {
         totalAmount: amount,
         timestamp: DateTime.now(),
       );
-      
-      _transactions.add(transaction);
-      
-      // Save data to storage
+      _transactions.add(transaction);      
       await _saveData();
-      
       notifyListeners();
     } catch (e) {
       print('Error adding cash: $e');
     }
-  }
-  
-  // Get transactions for a specific symbol
+  }  
   List<Transaction> getTransactionsForSymbol(String symbol) {
     return _transactions.where((t) => t.symbol == symbol).toList();
-  }
-  
-  // Get recent transactions - last 30 days by default
+  }  
   List<Transaction> getRecentTransactions({int days = 30}) {
     final cutoffDate = DateTime.now().subtract(Duration(days: days));
     return _transactions
         .where((t) => t.timestamp.isAfter(cutoffDate))
         .toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp)); // Latest first
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
   
-  // Get current portfolio value
   Future<double> getTotalPortfolioValue() async {
     double totalValue = _cashBalance;
     
-    // This could be optimized to batch fetch current prices
     for (var holding in _holdings) {
       try {
         // In a real app, mse gees api ogwol fetch hiine
-        // For now, we'll use a mock price (current price = average cost * random factor)
         final currentPrice = holding.averageCost * (0.9 + (0.2 * (DateTime.now().millisecondsSinceEpoch % 100) / 100));
         totalValue += holding.quantity * currentPrice;
       } catch (e) {
@@ -259,8 +214,6 @@ class PortfolioProvider extends ChangeNotifier {
   }
   
   Map<String, double> getPortfolioPerformance() {
-    // This would involve a more complex calculation in a real app
-    // For our demo, we'll return mock performance data
     return {
       'daily': (_getRandomPerformance() * 0.01), // e.g., 0.02 (2%)
       'weekly': (_getRandomPerformance() * 0.03),
@@ -275,7 +228,6 @@ class PortfolioProvider extends ChangeNotifier {
     return base / 2.0;  // 70% chance positive
   }
   
-  // Add sample holdings for demonstration purposes
   void addSampleHoldings() {
     _holdings = [
       Holding(
@@ -322,7 +274,6 @@ class PortfolioProvider extends ChangeNotifier {
       ),
     ];
     
-    // Create corresponding transactions for these holdings
     _transactions = [
       Transaction(
         symbol: 'AARD',
@@ -501,31 +452,20 @@ class PortfolioProvider extends ChangeNotifier {
         timestamp: DateTime.now().subtract(Duration(days: 15)),
       ),
     ];
-    
-    // Update cash balance (starting with initial $10,000 minus the purchases)
-    _cashBalance = 10000.0 - 1800.0 - 1650.0 - 1080.0 - 480.0 - 1015.0 - 960.0;
-    
-    // Notify listeners about the change
+    _cashBalance = 10000.0 - 1800.0 - 1650.0 - 1080.0 - 480.0 - 1015.0 - 960.0;    
     notifyListeners();
-  }
-  
-  // Clear all portfolio data (for testing/reset)
+  }  
   Future<void> clearPortfolioData() async {
     try {
       _holdings = [];
       _transactions = [];
-      _cashBalance = 10000.0;
-      
-      // Save empty data to storage
+      _cashBalance = 10000.0;      
       await _saveData();
-      
       notifyListeners();
     } catch (e) {
       print('Error clearing portfolio data: $e');
     }
-  }
-  
-  // Helper methods
+  }  
   void _setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
