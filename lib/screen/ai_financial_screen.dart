@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../services/ai_financial_service.dart';
 import '../widgets/trading_view_widget.dart';
 
@@ -40,7 +39,6 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
     });
 
     try {
-      // Load portfolio analysis
       final portfolio = [
         {'symbol': 'AARD', 'shares': 30, 'avgPrice': 1200.0},
         {'symbol': 'ADB', 'shares': 10, 'avgPrice': 900.0},
@@ -54,8 +52,6 @@ class _AIFinancialScreenState extends State<AIFinancialScreen>
         {'symbol': 'TTL', 'shares': 200, 'avgPrice': 29000.0}
       ];
       _portfolioAnalysis = await _aiService.analyzePortfolio(portfolio);
-
-      // Load recommendations
       _recommendations = await _aiService.getStockRecommendations(
         riskLevel: 'Moderate',
         investmentAmount: 10000,
