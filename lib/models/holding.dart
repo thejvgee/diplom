@@ -34,7 +34,6 @@ class Holding {
     );
   }
   
-  // Calculate new average cost when buying more shares
   static Holding combine(Holding existing, double newQuantity, double newPrice) {
     final totalQuantity = existing.quantity + newQuantity;
     final totalCost = existing.totalCost + (newQuantity * newPrice);
