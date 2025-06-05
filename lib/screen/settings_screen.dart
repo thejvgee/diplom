@@ -18,7 +18,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _useMockData = false;
   final _formKey = GlobalKey<FormState>();
 
-  // Additional settings
   bool _enableNotifications = true;
   bool _enableMarketAlerts = true;
   bool _enablePortfolioUpdates = true;
@@ -27,10 +26,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TextEditingController _nameController = TextEditingController();
   TextEditingController _emailController = TextEditingController();
 
-  // List of available currencies
-  final List<String> _currencies = ['USD', 'EUR', 'MNT'];
+  final List<String> _currencies = ['MNT', 'EUR', 'USD'];
 
-  // List of refresh intervals
   final List<String> _refreshIntervals = [
     '5 minutes',
     '15 minutes',
@@ -58,23 +55,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Load mock data preference
       String? useMockDataStr = await _storage.read(key: 'use_mock_data');
       _useMockData = useMockDataStr == 'true';
 
-      // Load notification preferences
       _enableNotifications = prefs.getBool('enable_notifications') ?? true;
       _enableMarketAlerts = prefs.getBool('enable_market_alerts') ?? true;
-      _enablePortfolioUpdates =
-          prefs.getBool('enable_portfolio_updates') ?? true;
-
-      // Load refresh interval
+      _enablePortfolioUpdates = prefs.getBool('enable_portfolio_updates') ?? true;
       _refreshInterval = prefs.getString('refresh_interval') ?? '15 minutes';
-
-      // Load currency
       _selectedCurrency = prefs.getString('currency') ?? 'USD';
-
-      // Load user info
       _nameController.text = prefs.getString('userName') ?? '';
       _emailController.text = prefs.getString('userEmail') ?? '';
     } catch (e) {
@@ -88,15 +76,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _logout() async {
     try {
-      // Clear secure storage
       final _storage = FlutterSecureStorage();
       await _storage.deleteAll();
-
-      // Clear shared preferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-
-      // Navigate to login screen and remove all previous routes
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -129,7 +112,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return connectivityResult != ConnectivityResult.none;
   }
 
-  // Save notification preferences
   Future<void> _saveNotificationPreferences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -147,7 +129,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Save refresh interval
   Future<void> _saveRefreshInterval(String interval) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -164,7 +145,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Save currency
   Future<void> _saveCurrency(String currency) async {
     try {
       final appState = Provider.of<AppState>(context, listen: false);
@@ -180,8 +160,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
   }
-
-  // Save user profile
 
   Future<void> _saveUserProfile() async {
     try {
@@ -223,7 +201,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // User Profile Section
                   Text(
                     'Хэрэглэгчийн мэдээлэл',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -320,8 +297,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Appearance Settings
                   Text(
                     'Appearance',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -359,8 +334,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Security Settings
                   Text(
                     'Security',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -397,8 +370,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Notification Settings
                   Text(
                     'Мэдэгдэл',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -483,8 +454,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Preferences
                   Text(
                     'Сонголтууд',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -718,8 +687,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Data Settings
                   Text(
                     'Data Settings',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -787,8 +754,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-
-                  // Network Status
                   Text(
                     'Network Status',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -849,7 +814,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   SizedBox(height: 24.0),
 
-                  // About
                   Text(
                     'About',
                     style: Theme.of(context).textTheme.headlineSmall,
