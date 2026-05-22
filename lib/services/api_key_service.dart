@@ -3,51 +3,60 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiKeyService {
-  static final _storage = FlutterSecureStorage();
-  
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  static const String _keyName = 'gemini_api_key';
+
   static Future<String> getGeminiApiKey() async {
     try {
-      String? apiKey = await _storage.read(key: 'gemini_api_key');
-      
+      final apiKey = await _storage.read(key: _keyName);
+
       if (apiKey == null || apiKey.isEmpty) {
-        return 'API key';
+        return '';
       }
-      
+
       return apiKey;
     } catch (e) {
-      print('Error retrieving Gemini API key: $e');
+      _log('Error retrieving API key: $e');
       return '';
     }
   }
-    static Future<bool> saveGeminiApiKey(String apiKey) async {
+
+  static Future<bool> saveGeminiApiKey(String apiKey) async {
     try {
-      await _storage.write(key: 'gemini_api_key', value: apiKey);
+      await _storage.write(key: _keyName, value: apiKey);
       return true;
     } catch (e) {
-      print('Error saving Gemini API key: $e');
+      _log('Error saving API key: $e');
       return false;
     }
   }
-  
+
   static Future<bool> validateGeminiApiKey(String apiKey) async {
-    if (apiKey.isEmpty) {
-      return false;
-    }
-    
+    if (apiKey.isEmpty) return false;
+
     try {
-      final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey');
-      final response = await http.get(url).timeout(Duration(seconds: 10));
-            if (response.statusCode == 200) {
-        return true;
-      }
-      
-      print('API key validation failed. Status code: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+            const Duration(seconds: 10),
+          );
+
+      if (response.statusCode == 200) return true;
+
+      _log('Validation failed: ${response.statusCode} - ${response.body}');
       return false;
     } catch (e) {
-      print('Error validating Gemini API key: $e');
+      _log('Validation error: $e');
       return false;
     }
   }
-} 
+
+  static void _log(String msg) {
+    // CI friendly logging
+    // ignore: avoid_print
+    print(msg);
+  }
+}
