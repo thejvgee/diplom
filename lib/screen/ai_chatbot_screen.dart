@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/gemini_service.dart';
@@ -19,7 +18,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
   late GeminiService _geminiService;
   bool _isLoading = false;
-  bool _isError = false;
   bool _isUsingDemoMode = false;
   int _retryCount = 0;
   static const int _maxRetries = 3;
@@ -50,7 +48,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   Future<void> _initializeChat() async {
     setState(() {
       _isLoading = true;
-      _isError = false;
     });
     try {
       final response = await _geminiService.startChat();
@@ -68,7 +65,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
       });
     } catch (e) {
       setState(() {
-        _isError = true;
         _isLoading = false;
         _isUsingDemoMode = true;
         _messages.add({
@@ -96,7 +92,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         'timestamp': DateTime.now().toString(),
       });
       _isLoading = true;
-      _isError = false;
       _showSuggestions = false;
     });
 
@@ -121,7 +116,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           'isError': isErrorResponse ? true : null,
           'isDemo': isUsingDemo,
         });
-        _isError = isErrorResponse;
         _isUsingDemoMode = _isUsingDemoMode || isUsingDemo;
         _isLoading = false;
       });
@@ -145,7 +139,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           });
           _showSuggestions = true;
         }
-        _isError = true;
         _isLoading = false;
       });
     }
@@ -292,10 +285,12 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         _chatHistoryList.removeWhere((item) => item['id'] == messageId);
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чат устгагдлаа')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чат устгах үед алдаа гарлаа: $e')),
       );
@@ -345,10 +340,12 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         }
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чатыг амжилттай шинэчиллээ')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чатыг шинэчлэхэд алдаа гарлаа: $e')),
       );
@@ -690,8 +687,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   String _formatInvestmentRecommendation(String text) {
-    final parts = text.split('\n\n');
-    String header = parts.isNotEmpty ? parts[0] : '';
     final formattedText = text.replaceAllMapped(
         RegExp(
             r'^(\d+\.\s+)([A-Z]+(?:\.[A-Z])?):\s+([^-]+)\s*-\s*(.+)$',

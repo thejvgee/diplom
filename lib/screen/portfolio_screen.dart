@@ -2,7 +2,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:intl/intl.dart';
+
 import '../models/holding.dart';
+import '../providers/mse_market_provider.dart';
 import '../providers/portfolio_provider.dart';
 
 class PortfolioScreen extends StatefulWidget {
@@ -14,6 +17,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String selectedTimeRange = '1M';
+  static final NumberFormat _money = NumberFormat('#,##0', 'en_US');
+  static final NumberFormat _compactMoney = NumberFormat.compact(locale: 'en_US');
 
   @override
   void initState() {
@@ -83,14 +88,12 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               ? (portfolioProvider.cashBalance / totalValue) * 100
               : 0;
 
-          // Get the last updated time
-          DateTime now = DateTime.now();
-          String lastUpdated =
-              "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
+          // Ханш хамгийн сүүлд хэзээ шинэчлэгдсэн бэ (MSE)
+          final mseUpdated = context.watch<MseMarketProvider>().lastUpdated;
+          String lastUpdated = mseUpdated == null
+              ? '—'
+              : "${mseUpdated.hour}:${mseUpdated.minute.toString().padLeft(2, '0')}";
 
-          // Calculate overall P/L estimates
-          double dailyChange =
-              totalValue * 0.01; // For demo, assume 1% daily change
           double overallGainLoss = 0;
           double overallGainLossPercent = 0;
 
@@ -107,9 +110,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
           List<Holding> sortedHoldings = List.from(portfolioProvider.holdings);
           if (sortedHoldings.isNotEmpty) {
             sortedHoldings.sort((a, b) {
-              double aProfit = (a.currentPrice - a.averageCost) / a.averageCost;
-              double bProfit = (b.currentPrice - b.averageCost) / b.averageCost;
-              return bProfit.compareTo(aProfit); // Descending order
+              return b.profitLossPercentage.compareTo(a.profitLossPercentage);
             });
           }
 
@@ -411,7 +412,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         final cashBalance = provider.cashBalance;
         final double totalValue = holdings.fold<double>(
           0.0,
-              (sum, h) => sum + (h.quantity * (h.currentPrice ?? h.averageCost)),
+              (sum, h) => sum + (h.quantity * h.effectivePrice),
         ) + cashBalance;
 
         if (totalValue == 0.0) {
@@ -438,7 +439,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         List<PieChartSectionData> sections = [];
         for (int i = 0; i < holdings.length; i++) {
           final holding = holdings[i];
-          final holdingValue = holding.quantity * (holding.currentPrice ?? holding.averageCost);
+          final holdingValue = holding.quantity * holding.effectivePrice;
           if (holdingValue > 0) {
             final percentage = (holdingValue / totalValue) * 100;
             sections.add(
@@ -502,7 +503,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                         String message;
                         if (idx < holdings.length) {
                           final h = holdings[idx];
-                          final val = h.quantity * (h.currentPrice ?? h.averageCost);
+                          final val = h.quantity * h.effectivePrice;
                           final pct = (val / totalValue) * 100;
                           message = '${h.symbol}: ${pct.toStringAsFixed(1)}%';
                         } else {
@@ -526,7 +527,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 // Legend for holdings
                 ...holdings.asMap().entries.map((entry) {
                   final holding = entry.value;
-                  final value = holding.quantity * (holding.currentPrice ?? holding.averageCost);
+                  final value = holding.quantity * holding.effectivePrice;
                   final pct = (value / totalValue) * 100;
                   return _buildLegendItem(
                     '${holding.symbol} (${pct.toStringAsFixed(1)}%)',
@@ -548,9 +549,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
   }
 
   Widget _buildPerformerItem(Holding holding, {required bool isGainer}) {
-    double gainLossPercent =
-        ((holding.currentPrice - holding.averageCost) / holding.averageCost) *
-            100;
+    double gainLossPercent = holding.profitLossPercentage;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
@@ -598,7 +597,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${holding.currentPrice.toStringAsFixed(2)}\₮',
+                '${holding.effectivePrice.toStringAsFixed(2)}\₮',
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   fontSize: 16,
@@ -647,126 +646,105 @@ class _PortfolioScreenState extends State<PortfolioScreen>
     );
   }
 
-  // Performance Tab with fl_chart
+  static const Map<String, int> _rangeDays = {
+    '1W': 7,
+    '1M': 30,
+    '3M': 90,
+    '1Y': 365,
+    'Бүгд': 100000,
+  };
+
+  // Гүйцэтгэлийн таб: багцын өдөр тутмын бодит үнэлгээний түүх
   Widget _buildPerformanceTab(PortfolioProvider portfolioProvider) {
+    final days = _rangeDays[selectedTimeRange] ?? 30;
+    final cutoff = DateTime.now().subtract(Duration(days: days));
+    final points = portfolioProvider.valueHistory
+        .where((p) => p.day.isAfter(cutoff))
+        .toList();
+
     return Column(
       children: [
         _buildTimeRangeSelector(),
         Expanded(
           child: Padding(
             padding: EdgeInsets.all(16),
-            child: FutureBuilder<double>(
-              future: portfolioProvider.getTotalPortfolioValue(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return Center(child: CircularProgressIndicator());
-                }
-
-                double totalValue = snapshot.data ?? 0.0;
-
-                // For demo purposes, generate some mock history points
-                final List<FlSpot> spots = List.generate(
-                  7,
-                      (index) => FlSpot(
-                    index.toDouble(),
-                    totalValue * (0.95 + (index / 50)), // Create some variation
-                  ),
-                );
-
-                return LineChart(
-                  LineChartData(
-                    minX: 0,
-                    maxX: 6,
-                    minY: totalValue * 0.9,
-                    maxY: totalValue * 1.1,
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: spots,
-                        isCurved: true,
-                        color: Colors.black,
-                        dotData: FlDotData(show: false),
-                        belowBarData: BarAreaData(
-                          show: true,
-                          color: Colors.black.withOpacity(0.1),
-                        ),
-                      ),
-                    ],
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              '${value.toInt()}\₮',
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge
-                                    ?.color,
-                                fontSize: 12,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          getTitlesWidget: (value, meta) {
-                            final int day = value.toInt();
-                            final daysAgo = 6 - day;
-                            return Text(
-                              daysAgo == 0 ? 'Today' : '$daysAgo d',
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge
-                                    ?.color,
-                                fontSize: 12,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      rightTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            child: points.length < 2
+                ? Center(
+                    child: Text(
+                      'Багцын үнэлгээний түүх хуримтлагдаж байна.\n'
+                      'Апп-ыг өдөр бүр нээхэд график бүрдэнэ.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Theme.of(context).hintColor),
                     ),
-                    gridData: FlGridData(
-                      drawVerticalLine: true,
-                      drawHorizontalLine: true,
-                      verticalInterval: 1,
-                      getDrawingVerticalLine: (value) {
-                        return FlLine(
-                          color: Colors.grey[300],
-                          strokeWidth: 1,
-                        );
-                      },
-                      getDrawingHorizontalLine: (value) {
-                        return FlLine(
-                          color: Colors.grey[300],
-                          strokeWidth: 1,
-                        );
-                      },
-                    ),
-                    borderData: FlBorderData(
-                      show: true,
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                  ),
-                );
-              },
-            ),
+                  )
+                : _buildValueChart(points),
           ),
         ),
-        // Show portfolio performance summary
         Padding(
           padding: EdgeInsets.all(16),
           child: _buildPerformanceSummary(portfolioProvider),
         ),
       ],
+    );
+  }
+
+  Widget _buildValueChart(List<ValuePoint> points) {
+    final values = points.map((p) => p.value).toList();
+    final minV = values.reduce((a, b) => a < b ? a : b);
+    final maxV = values.reduce((a, b) => a > b ? a : b);
+    final pad = (maxV - minV).abs() < 1 ? maxV * 0.01 + 1 : (maxV - minV) * 0.1;
+    final up = values.last >= values.first;
+    final color = up ? Colors.green : Colors.red;
+    final step = (points.length / 4).ceilToDouble();
+
+    return LineChart(
+      LineChartData(
+        minY: minV - pad,
+        maxY: maxV + pad,
+        lineBarsData: [
+          LineChartBarData(
+            spots: [
+              for (var i = 0; i < points.length; i++)
+                FlSpot(i.toDouble(), points[i].value)
+            ],
+            color: color,
+            barWidth: 2,
+            dotData: FlDotData(show: points.length < 15),
+            belowBarData:
+                BarAreaData(show: true, color: color.withOpacity(0.1)),
+          ),
+        ],
+        titlesData: FlTitlesData(
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 48,
+              getTitlesWidget: (value, meta) => Text(
+                _compactMoney.format(value),
+                style: TextStyle(fontSize: 10),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: step,
+              getTitlesWidget: (value, meta) {
+                final i = value.toInt();
+                if (i < 0 || i >= points.length) return SizedBox.shrink();
+                final d = points[i].day;
+                return Text('${d.month}/${d.day}',
+                    style: TextStyle(fontSize: 10));
+              },
+            ),
+          ),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: FlGridData(drawVerticalLine: false),
+        borderData: FlBorderData(show: false),
+      ),
     );
   }
 
@@ -776,17 +754,14 @@ class _PortfolioScreenState extends State<PortfolioScreen>
       padding: EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: ['1D', '1W', '1M', '3M', '1Y', 'All'].map((range) {
+        children: _rangeDays.keys.map((range) {
+          final selected = selectedTimeRange == range;
           return GestureDetector(
-            onTap: () {
-              setState(() {
-                selectedTimeRange = range;
-              });
-            },
+            onTap: () => setState(() => selectedTimeRange = range),
             child: Container(
               padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: selectedTimeRange == range
+                color: selected
                     ? Theme.of(context).primaryColor
                     : Colors.grey[200],
                 borderRadius: BorderRadius.circular(16),
@@ -794,11 +769,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               child: Text(
                 range,
                 style: TextStyle(
-                  color:
-                  selectedTimeRange == range ? Colors.white : Colors.black,
-                  fontWeight: selectedTimeRange == range
-                      ? FontWeight.bold
-                      : FontWeight.normal,
+                  color: selected ? Colors.white : Colors.black,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             ),
@@ -808,41 +780,47 @@ class _PortfolioScreenState extends State<PortfolioScreen>
     );
   }
 
-  // Performance Summary Widget
+  // Гүйцэтгэлийн дүгнэлт: өнөөдөр (MSE-ийн өмнөх хаалттай харьцуулж),
+  // 7 хоног ба сар (хадгалсан үнэлгээний түүхээр)
   Widget _buildPerformanceSummary(PortfolioProvider portfolioProvider) {
-    return FutureBuilder<double>(
-      future: portfolioProvider.getTotalPortfolioValue(),
-      builder: (context, snapshot) {
-        double totalValue = snapshot.data ?? 0.0;
-
-        // Generate mock performance data
-        final dayChange = (totalValue * 0.005) *
-            (DateTime.now().millisecondsSinceEpoch % 3 == 0 ? -1 : 1);
-        final weekChange = (totalValue * 0.02) *
-            (DateTime.now().millisecondsSinceEpoch % 2 == 0 ? -1 : 1);
-        final monthChange = (totalValue * 0.05);
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Гүйцэтгэлийн дүгнэлт',
-                style: Theme.of(context).textTheme.titleLarge),
-            SizedBox(height: 12),
-            _buildPerformanceItem('Өнөөдөр', dayChange, totalValue),
-            SizedBox(height: 8),
-            _buildPerformanceItem('Өнгөрсөн 7 хоног', weekChange, totalValue),
-            SizedBox(height: 8),
-            _buildPerformanceItem('Өнгөрсөн сар', monthChange, totalValue),
-          ],
-        );
-      },
+    final total = portfolioProvider.totalValue;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Гүйцэтгэлийн дүгнэлт',
+            style: Theme.of(context).textTheme.titleLarge),
+        SizedBox(height: 12),
+        _buildPerformanceItem('Өнөөдөр', portfolioProvider.dayChange, total),
+        SizedBox(height: 8),
+        _buildPerformanceItem(
+            'Өнгөрсөн 7 хоног', portfolioProvider.changeSince(7), total),
+        SizedBox(height: 8),
+        _buildPerformanceItem(
+            'Өнгөрсөн сар', portfolioProvider.changeSince(30), total),
+      ],
     );
   }
 
-  // Performance Item
-  Widget _buildPerformanceItem(String period, double change, double total) {
-    final percentChange = (change / total) * 100;
+  // Performance Item (change == null → өгөгдөл хараахан хүрэлцэхгүй)
+  Widget _buildPerformanceItem(String period, double? change, double total) {
+    if (change == null) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(period, style: TextStyle(fontSize: 16)),
+          Text('Түүх хүрэлцэхгүй',
+              style: TextStyle(color: Theme.of(context).hintColor)),
+        ],
+      );
+    }
+    final base = total - change;
+    final percentChange = base > 0 ? (change / base) * 100 : 0.0;
     final isPositive = change >= 0;
+    final color = change > 0
+        ? Colors.green
+        : change < 0
+            ? Colors.red
+            : Theme.of(context).textTheme.bodyLarge?.color;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -851,33 +829,20 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         Row(
           children: [
             Text(
-              '${isPositive ? '+' : ''}${change.toStringAsFixed(2)}\₮',
-              style: TextStyle(
-                color: Theme.of(context).textTheme.bodyLarge?.color,
-                fontWeight: FontWeight.bold,
-              ),
+              '${isPositive ? '+' : ''}${_money.format(change)}₮',
+              style: TextStyle(color: color, fontWeight: FontWeight.bold),
             ),
             SizedBox(width: 8),
-            Row(
-              children: [
-                Icon(
-                  isPositive ? Icons.arrow_upward : Icons.arrow_downward,
-                  size: 12,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                ),
-                Text(
-                  '${percentChange.toStringAsFixed(2)}%',
-                  style: TextStyle(
-                    color: Theme.of(context).textTheme.bodyLarge?.color,
-                  ),
-                ),
-              ],
-            ),
+            Icon(isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                size: 12, color: color),
+            Text('${percentChange.toStringAsFixed(2)}%',
+                style: TextStyle(color: color)),
           ],
         ),
       ],
     );
   }
+
 
   // Helper Widgets
   Widget _buildLegendItem(String label, Color color) {
@@ -970,9 +935,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
 
   // Asset Card for Assets Tab
   Widget _buildAssetCard(Holding holding) {
-    final currentValue = holding.quantity * holding.currentPrice;
-    final gainLoss = currentValue - holding.totalCost;
-    final gainLossPercent = (gainLoss / holding.totalCost) * 100;
+    final currentValue = holding.currentValue;
+    final gainLossPercent = holding.profitLossPercentage;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1012,7 +976,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                       ),
                       SizedBox(height: 4),
                       Text(
-                        'Одоогоор: ${holding.currentPrice.toStringAsFixed(2)}\₮ | Дундаж: ${holding.averageCost.toStringAsFixed(2)}\₮',
+                        'Одоогоор: ${holding.effectivePrice.toStringAsFixed(2)}\₮ | Дундаж: ${holding.averageCost.toStringAsFixed(2)}\₮',
                         style: TextStyle(
                             color: Theme.of(context).hintColor, fontSize: 14),
                       ),

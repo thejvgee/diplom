@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../services/gemini_service.dart';
+import '../ai_engine/advisor_engine.dart';
+import '../ai_engine/risk_profile.dart';
+import '../providers/advisor_provider.dart';
+import '../providers/mse_market_provider.dart';
+import '../providers/portfolio_provider.dart';
+import '../providers/user_preferences_provider.dart';
 import 'ai_chatbot_screen.dart';
 
 class AIAdvisorScreen extends StatefulWidget {
@@ -22,17 +28,16 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
   List<Map<String, dynamic>> _stockRecommendations = [];
   List<Map<String, dynamic>> _financialTips = [];
   List<Map<String, dynamic>> _marketAlerts = [];
-  int _portfolioHealthScore = 75;
-
-  late GeminiService _geminiService;
+  int _portfolioHealthScore = 0;
 
   @override
   void initState() {
     super.initState();
-    _geminiService = GeminiService();
-    _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
+  /// Өөрийн AI engine-ээр (Gemini-гүй) хувьцааны санал, сануулга,
+  /// багцын эрүүл мэндийн оноог хэрэглэгчийн бодит багцаар тооцно.
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -41,63 +46,103 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
     });
 
     try {
-      final recommendationsFuture = _geminiService.getStockRecommendations(count:5);
-      final tipsFuture = _geminiService.getFinancialTips(count:5);
-      final alertsFuture = _geminiService.getMarketAlerts(count:3);
-      final scoreFuture =
-      _geminiService.getPortfolioHealthScore(['APU', 'AARD', 'LEND']);
+      final advisor = context.read<AdvisorProvider>();
+      final portfolio = context.read<PortfolioProvider>();
+      final prefs = context.read<UserPreferencesProvider>();
+      final mse = context.read<MseMarketProvider>();
+      await advisor.load();
+      final signals = advisor.signals;
+      if (signals == null) {
+        throw Exception(advisor.error ?? 'AI загварын өгөгдөл алга');
+      }
+      final engine = AdvisorEngine(signals);
+      final profile = RiskProfile.fromKey(prefs.riskTolerance);
+      final report = engine.analyze(
+        holdings: [
+          for (final h in portfolio.holdings)
+            HoldingInput(
+              symbol: h.symbol,
+              quantity: h.quantity,
+              averageCost: h.averageCost,
+              currentPrice: h.currentPrice,
+            ),
+        ],
+        cash: portfolio.cashBalance,
+        profile: profile,
+        livePrices: mse.lastPrices,
+      );
 
-      final recommendations = await recommendationsFuture;
-      final tips = await tipsFuture;
-      final alerts = await alertsFuture;
-      final score = await scoreFuture;
-      final safeRecommendations =
-          recommendations ?? _getDefaultStockRecommendations();
-      final safeTips = tips ?? _getDefaultFinancialTips();
-      final safeAlerts = alerts ?? _getDefaultMarketAlerts();
+      // Санал болгох хувьцаа: хөрвөх чадвартай, дунджаас илүү дохиотой
+      final picks = signals.signals
+          .where((s) => s.liquidity >= 0.6 && engine.edgeOf(s) > 0.02)
+          .toList()
+        ..sort((a, b) => engine.edgeOf(b).compareTo(engine.edgeOf(a)));
+      final recommendations = [
+        for (final s in picks.take(5))
+          {
+            'symbol': s.symbol,
+            'name': s.name,
+            'recommendation': engine.edgeOf(s) >= 0.06 ? 'Strong Buy' : 'Buy',
+            'confidence': (s.probUp * 100).round(),
+            'reason': engine.explainSignal(s),
+          },
+      ];
+
+      // Сануулга: багцын сул тал + зах зээлийн ерөнхий байдал
+      final alerts = <Map<String, dynamic>>[
+        for (final w in report.health.weaknesses)
+          {
+            'title': 'Таны багц',
+            'description': w,
+            'severity': report.health.score < 45 ? 'high' : 'moderate',
+            'impactedSectors': <String>[],
+          },
+      ];
+      final liquid = signals.signals.where((s) => s.liquidity >= 0.6).toList();
+      if (liquid.isNotEmpty) {
+        final falling = liquid.where((s) => s.ret20 < 0).length / liquid.length;
+        if (falling >= 0.6) {
+          alerts.add({
+            'title': 'Зах зээлийн уналт',
+            'description': 'Идэвхтэй арилжаалагддаг хувьцааны '
+                '${(falling * 100).round()}% нь сүүлийн сард буурсан байна.',
+            'severity': 'moderate',
+            'impactedSectors': <String>[],
+          });
+        }
+        final deep = liquid.where((s) => s.drawdown60 <= -0.2).toList();
+        if (deep.isNotEmpty) {
+          alerts.add({
+            'title': 'Огцом уналттай хувьцаа',
+            'description': '60 өдрийн оргилоосоо 20%-иас их унасан хувьцаа.',
+            'severity': 'low',
+            'impactedSectors': [for (final s in deep.take(6)) s.symbol],
+          });
+        }
+      }
 
       if (mounted) {
         setState(() {
-          _stockRecommendations = safeRecommendations;
-          _financialTips = safeTips;
-          _marketAlerts = safeAlerts;
-          _portfolioHealthScore = score;
+          _stockRecommendations = recommendations;
+          _financialTips = _getDefaultFinancialTips();
+          _marketAlerts = alerts;
+          _portfolioHealthScore = report.health.score;
           _isLoading = false;
         });
       }
     } catch (e) {
-      print('Error loading AI advisor data: $e');
+      debugPrint('Error loading AI advisor data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
           _hasError = true;
-          _errorMessage = 'Could not load data: ${e.toString()}';
-          // Use default data
-          _stockRecommendations = _getDefaultStockRecommendations();
+          _errorMessage = 'Мэдээлэл ачаалж чадсангүй: $e';
+          _stockRecommendations = [];
           _financialTips = _getDefaultFinancialTips();
-          _marketAlerts = _getDefaultMarketAlerts();
+          _marketAlerts = [];
         });
       }
     }
-  }
-
-  List<Map<String, dynamic>> _getDefaultStockRecommendations() {
-    return [
-      {
-        "symbol": "AARD",
-        "name": "Ард Даатгал ХК.",
-        "recommendation": "Buy",
-        "confidence": 85,
-        "reason": "Тогтвортой олон жил болсон компани"
-      },
-      {
-        "symbol": "APU",
-        "name": "АПУ ХК.",
-        "recommendation": "Buy",
-        "confidence": 80,
-        "reason": "Маш тогтвортой нийлүүлэх бүтээгдэхүүн эрэллтэй"
-      },
-    ];
   }
 
   List<Map<String, dynamic>> _getDefaultFinancialTips() {
@@ -113,18 +158,6 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
         "description":
         "Эрсдэлийг бууруулахын тулд хөрөнгө оруулалтыг хөрөнгийн янз бүрийн ангилалд хуваа.",
         "category": "Investing"
-      },
-    ];
-  }
-
-  List<Map<String, dynamic>> _getDefaultMarketAlerts() {
-    return [
-      {
-        "title": "Зах зээлийн тогтворгүй байдал",
-        "description":
-        "Тогтворгүй байдал нэмэгдэж буй зах зээлүүд - багцаа хянаарай",
-        "severity": "moderate",
-        "impactedSectors": ["Technology", "Finance"]
       },
     ];
   }
@@ -438,7 +471,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                       SizedBox(height: 4),
                       Row(
                         children: [
-                          Text('confidence: '),
+                          Text('Өсөх магадлал: '),
                           Expanded(
                             child: LinearProgressIndicator(
                               value: _safeGetInt(recommendation,

@@ -51,7 +51,6 @@ class GeminiService {
   bool _usingBackupKey = false;
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
-  final Content _promptContent = Content.text(_basePrompt);
   GeminiService._internal();
   late final List<Content> _baseContents;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

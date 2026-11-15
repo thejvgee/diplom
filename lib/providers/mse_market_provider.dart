@@ -62,6 +62,12 @@ class MseMarketProvider extends ChangeNotifier {
     for (final q in _quotes.values) q.symbol: q.price,
   };
 
+  /// Өмнөх өдрийн хаалтын ханш (өнөөдрийн өөрчлөлт тооцоход).
+  Map<String, double> get previousCloses => {
+    for (final q in _quotes.values)
+      if (q.previousClose > 0) q.symbol: q.previousClose,
+  };
+
   /// Эхлүүлэх. Олон удаа дуудахад зөвхөн нэг удаа ажиллана.
   Future<void> start() async {
     if (_started) return;

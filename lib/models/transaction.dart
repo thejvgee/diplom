@@ -30,12 +30,13 @@ class Transaction {
   
   factory Transaction.fromJson(Map<String, dynamic> json) {
     return Transaction(
-      symbol: json['symbol'],
-      action: json['action'],
-      quantity: json['quantity'],
-      price: json['price'],
-      totalAmount: json['totalAmount'],
-      timestamp: DateTime.parse(json['timestamp']),
+      symbol: json['symbol'] as String,
+      action: json['action'] as String,
+      // Firestore/JSON бүхэл тоог int болгож буцаадаг тул num-аас хөрвүүлнэ
+      quantity: (json['quantity'] as num).toDouble(),
+      price: (json['price'] as num).toDouble(),
+      totalAmount: (json['totalAmount'] as num).toDouble(),
+      timestamp: DateTime.parse(json['timestamp'] as String),
     );
   }
   

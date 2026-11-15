@@ -1,10 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../providers/app_state.dart';
+import '../providers/portfolio_provider.dart';
 import '../providers/user_preferences_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -15,7 +18,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _storage = FlutterSecureStorage();
   bool _isLoading = true;
-  bool _useMockData = false;
   final _formKey = GlobalKey<FormState>();
 
   // Additional settings
@@ -58,10 +60,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Load mock data preference
-      String? useMockDataStr = await _storage.read(key: 'use_mock_data');
-      _useMockData = useMockDataStr == 'true';
-
       // Load notification preferences
       _enableNotifications = prefs.getBool('enable_notifications') ?? true;
       _enableMarketAlerts = prefs.getBool('enable_market_alerts') ?? true;
@@ -78,6 +76,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _nameController.text = prefs.getString('userName') ?? '';
       _emailController.text = prefs.getString('userEmail') ?? '';
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load settings: $e')),
       );
@@ -88,15 +87,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _logout() async {
     try {
-      // Clear secure storage
-      final _storage = FlutterSecureStorage();
-      await _storage.deleteAll();
+      // Firebase-ээс гарна (өмнө нь зөвхөн утасны санг цэвэрлэдэг байсан тул
+      // хэрэглэгч нэвтэрсэн хэвээр үлддэг байв)
+      await FirebaseAuth.instance.signOut();
 
-      // Clear shared preferences
+      await _storage.deleteAll();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
 
-      // Navigate to login screen and remove all previous routes
+      if (!mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,22 +104,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleMockData(bool value) async {
-    try {
-      await _storage.write(key: 'use_mock_data', value: value.toString());
-      setState(() => _useMockData = value);
+  Future<bool> _confirm(String title, String message, String action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Цуцлах')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value
-              ? 'Mock data enabled. App will use offline data.'
-              : 'Mock data disabled. App will use real data when available.'),
-        ),
-      );
+  /// Симуляцийн дансыг анхны 10 сая төгрөгтэй болгож шинээр эхлүүлнэ.
+  Future<void> _resetPortfolio() async {
+    if (!await _confirm(
+        'Багцыг шинээр эхлүүлэх үү?',
+        'Бүх хувьцаа, гүйлгээний түүх устаж, данс анхны '
+            '10,000,000₮ болно. Энэ үйлдлийг буцаах боломжгүй.',
+        'Шинээр эхлүүлэх')) return;
+    if (!mounted) return;
+    await context.read<PortfolioProvider>().resetPortfolio();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Багц шинээр эхэллээ')));
+  }
+
+  /// Бүртгэл болон бүх өгөгдлийг устгана (Google Play-ийн шаардлага).
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Firebase бүртгэл устгахад сүүлийн ~5 минутад нэвтэрсэн байх шаардлагатай.
+    // Өгөгдлийг устгаад бүртгэл устахгүй үлдэхээс сэргийлж урьдчилан шалгана.
+    final lastSignIn = user.metadata.lastSignInTime;
+    if (lastSignIn == null ||
+        DateTime.now().difference(lastSignIn) > Duration(minutes: 5)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Аюулгүй байдлын үүднээс гараад дахин нэвтэрч орсны '
+            'дараа бүртгэлээ устгана уу.'),
+        duration: Duration(seconds: 5),
+      ));
+      return;
+    }
+
+    if (!await _confirm(
+        'Бүртгэлээ устгах уу?',
+        'Таны бүртгэл, багц, гүйлгээний түүх, AI чатын түүх бүгд бүрмөсөн '
+            'устана. Энэ үйлдлийг буцаах боломжгүй.',
+        'Бүрмөсөн устгах')) return;
+    if (!mounted) return;
+
+    final portfolio = context.read<PortfolioProvider>();
+    try {
+      final db = FirebaseFirestore.instance;
+      final chats = await db
+          .collection('chat_history')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      final batch = db.batch();
+      for (final doc in chats.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      await portfolio.deleteAllData();
+      await db.collection('users').doc(user.uid).delete();
+      await user.delete();
+
+      await _storage.deleteAll();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.code == 'requires-recent-login'
+            ? 'Дахин нэвтэрч орсны дараа бүртгэлээ устгана уу.'
+            : 'Бүртгэл устгахад алдаа гарлаа: ${e.message}'),
+      ));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update setting: $e')),
-      );
+          SnackBar(content: Text('Бүртгэл устгахад алдаа гарлаа: $e')));
     }
   }
 
@@ -137,10 +214,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.setBool('enable_market_alerts', _enableMarketAlerts);
       await prefs.setBool('enable_portfolio_updates', _enablePortfolioUpdates);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Notification preferences saved')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save notification preferences: $e')),
       );
@@ -154,10 +233,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await prefs.setString('refresh_interval', interval);
       setState(() => _refreshInterval = interval);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Data refresh interval updated')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save refresh interval: $e')),
       );
@@ -171,10 +252,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await appState.setCurrency(currency);
       setState(() => _selectedCurrency = currency);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Валют шинэчлэгдлээ $currency')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Валют хадгалахад алдаа гарлаа: $e')),
       );
@@ -190,11 +273,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await appState.updateUserInfo(
             _nameController.text, _emailController.text);
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Профайл амжилттай шинэчлэгдлээ')),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Профайл шинэчлэгдэхэд алдаа гарлаа: $e')),
       );
@@ -719,70 +804,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   SizedBox(height: 24.0),
 
-                  // Data Settings
+                  // Данс
                   Text(
-                    'Data Settings',
+                    'Данс',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   SizedBox(height: 16.0),
-
                   Card(
                     elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Mock Data Mode',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                          SizedBox(height: 8.0),
-                          Text(
-                            'Идэвхжүүлсэн үед апп нь API дуудлага хийхийн оронд дотооддоо үүсгэсэн хуурамч өгөгдлийг ашиглана. Энэ нь тест хийх эсвэл интернетийн холболт хязгаарлагдмал үед хэрэг болно.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                          SizedBox(height: 16.0),
-                          SwitchListTile(
-                            title: Text('Use Mock Data'),
-                            subtitle: Text(_useMockData
-                                ? 'Using offline demo data'
-                                : 'Using real-time market data when available'),
-                            value: _useMockData,
-                            onChanged: _toggleMockData,
-                            secondary: Icon(
-                              _useMockData ? Icons.cloud_off : Icons.cloud_done,
-                              color:
-                                  _useMockData ? Colors.orange : Colors.green,
-                            ),
-                          ),
-                          if (_useMockData)
-                            Container(
-                              padding: EdgeInsets.all(8.0),
-                              color: Colors.orange.shade50,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.info_outline,
-                                      color: Colors.orange),
-                                  SizedBox(width: 8.0),
-                                  Expanded(
-                                    child: Text(
-                                      'Mock data горим идэвхижсэн. The app will show simulated data.',
-                                      style: TextStyle(
-                                          color: Colors.orange.shade800),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: Icon(Icons.restart_alt),
+                          title: Text('Симуляцийн багцыг шинээр эхлүүлэх'),
+                          subtitle: Text('Данс анхны 10,000,000₮ болно'),
+                          onTap: _resetPortfolio,
+                        ),
+                        Divider(height: 1),
+                        ListTile(
+                          leading:
+                              Icon(Icons.delete_forever, color: Colors.red),
+                          title: Text('Бүртгэл устгах',
+                              style: TextStyle(color: Colors.red)),
+                          subtitle: Text('Бүх өгөгдөл бүрмөсөн устана'),
+                          onTap: _deleteAccount,
+                        ),
+                      ],
                     ),
                   ),
 
@@ -830,7 +877,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     Text(
                                       isConnected
                                           ? 'Та интернетэд холболттой байна. Бодит цагийн өгөгдлийг татаж авах боломжтой.'
-                                          : 'Интернэт холболтгүй байна. Апп нь кэш эсвэл mock data ашиглах болно.',
+                                          : 'Интернэт холболтгүй байна. Апп нь хамгийн сүүлд хадгалсан өгөгдлийг харуулна.',
                                       style: TextStyle(
                                         color: isConnected
                                             ? Colors.green.shade700

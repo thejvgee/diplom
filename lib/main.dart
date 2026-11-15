@@ -8,16 +8,12 @@ import 'screen/login_screen.dart'; // Import all screen files
 import 'screen/home_screen.dart';
 import 'screen/market_screen.dart';
 import 'providers/app_state.dart';
-import 'services/ai_financial_service.dart';
-import 'providers/ai_financial_provider.dart';
-import 'screen/ai_financial_screen.dart';
 import 'services/api_key_service.dart';
-import 'services/market_data_service.dart';
 import 'providers/portfolio_provider.dart';
 import 'providers/mse_market_provider.dart';
+import 'providers/crypto_market_provider.dart';
 import 'providers/advisor_provider.dart';
 import 'providers/user_preferences_provider.dart';
-import 'providers/investment_agent_provider.dart';
 import 'screen/portfolio_suggestions_screen.dart';
 
 void main() async {
@@ -29,72 +25,40 @@ void main() async {
   if (geminiApiKey.isNotEmpty) {
     isValidApiKey = await ApiKeyService.validateGeminiApiKey(geminiApiKey);
     if (!isValidApiKey) {
-      print('Warning: Gemini API key validation failed. Some AI features may not work correctly.');
+      debugPrint('Warning: Gemini API key validation failed. AI chat may not work.');
     }
   } else {
-    print('No Gemini API key provided. AI features will not be available.');
+    debugPrint('No Gemini API key provided. AI chat will not be available.');
   }
   await GeminiService().init();
-  // Create the market data service
-  final marketDataService = MarketDataService();
-  await marketDataService.initialize();
 
   // Монголын хөрөнгийн биржийн бодит ханш (open.mse.mn, үнэгүй)
-  final mseMarket = MseMarketProvider();
-  mseMarket.start();
+  final mseMarket = MseMarketProvider()..start();
+  // Крипто ханш (Binance) + ам.доллар/төгрөгийн ханш
+  final cryptoMarket = CryptoMarketProvider()..start();
+
+  // Нэвтэрсэн хэрэглэгч бүрийн багц (Firestore + утасны кэш)
+  final portfolio = PortfolioProvider();
+  void trackHoldings() =>
+      mseMarket.trackSymbols(portfolio.holdings.map((h) => h.symbol));
+  portfolio.addListener(trackHoldings);
+  mseMarket.addListener(() => portfolio.updateLivePrices(
+        mseMarket.lastPrices,
+        previousCloses: mseMarket.previousCloses,
+      ));
+  cryptoMarket.addListener(
+      () => portfolio.updateLivePrices(cryptoMarket.lastPricesMnt));
 
   runApp(
     MultiProvider(
       providers: [
-        Provider<AIFinancialService>(
-          create: (_) => AIFinancialService(
-            geminiApiKey: geminiApiKey,
-          ),
-        ),
-        ChangeNotifierProxyProvider<AIFinancialService, AIFinancialProvider>(
-          create: (context) => AIFinancialProvider(
-            aiService: context.read<AIFinancialService>(),
-          ),
-          update: (context, aiService, previous) => AIFinancialProvider(
-            aiService: aiService,
-          ),
-        ),
-        // Add investment agent provider
-        ChangeNotifierProvider<InvestmentAgentProvider>(
-          create: (_) => InvestmentAgentProvider(),
-        ),
-        // Add market data service provider
-        Provider<MarketDataService>.value(
-          value: marketDataService,
-        ),
-        // MSE-ийн бодит ханш
-        ChangeNotifierProvider<MseMarketProvider>.value(
-          value: mseMarket,
-        ),
+        ChangeNotifierProvider<MseMarketProvider>.value(value: mseMarket),
+        ChangeNotifierProvider<CryptoMarketProvider>.value(value: cryptoMarket),
         // Өөрийн AI зөвлөх (Gemini-гүй)
         ChangeNotifierProvider<AdvisorProvider>(
           create: (_) => AdvisorProvider()..load(),
         ),
-        // Add portfolio provider
-        ChangeNotifierProxyProvider<MarketDataService, PortfolioProvider>(
-          create: (context) {
-            final portfolio = PortfolioProvider(
-              marketDataService: context.read<MarketDataService>(),
-            )..addSampleHoldings(); // Initialize with sample data
-
-            // Багцын хувьцааны ханшийг MSE-ээс байнга шинэчилж байх
-            void trackHoldings() => mseMarket
-                .trackSymbols(portfolio.holdings.map((h) => h.symbol));
-            trackHoldings();
-            portfolio.addListener(trackHoldings);
-            mseMarket.addListener(
-              () => portfolio.updateLivePrices(mseMarket.lastPrices),
-            );
-            return portfolio;
-          },
-          update: (context, marketDataService, previous) => previous!,
-        ),
-        // Add user preferences provider
+        ChangeNotifierProvider<PortfolioProvider>.value(value: portfolio),
         ChangeNotifierProvider<UserPreferencesProvider>(
           create: (_) => UserPreferencesProvider(),
         ),
@@ -129,7 +93,6 @@ class AppTheme extends StatelessWidget {
       routes: {
         '/home': (context) => HomeScreen(),
         '/market': (context) => MarketScreen(),
-        '/ai_financial': (context) => AIFinancialScreen(geminiApiKey: geminiApiKey),
         '/portfolio_suggestions': (context) => PortfolioSuggestionsScreen(),
         '/forgot_password': (context) => ForgotPasswordScreen(),
       },

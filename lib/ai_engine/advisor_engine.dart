@@ -421,7 +421,10 @@ class AdvisorEngine {
     return name;
   }
 
-  String _explain(StockSignal? s, RiskProfile profile) {
+  /// Дохиог монгол хэлээр тайлбарлана (бодит тоотой).
+  String explainSignal(StockSignal? s) => _explain(s);
+
+  String _explain(StockSignal? s, [RiskProfile? profile]) {
     if (s == null) return '';
     final drivers = s.drivers.entries.toList()
       ..sort((a, b) => b.value.abs().compareTo(a.value.abs()));

@@ -1,30 +1,58 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jvgee_diplom/providers/advisor_provider.dart';
+import 'package:jvgee_diplom/providers/mse_market_provider.dart';
+import 'package:jvgee_diplom/providers/portfolio_provider.dart';
+import 'package:jvgee_diplom/providers/user_preferences_provider.dart';
+import 'package:jvgee_diplom/screen/portfolio_suggestions_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:jvgee_diplom/main.dart';
+import 'portfolio_provider_test.dart' show FakeRemote;
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const AppTheme(geminiApiKey: '',hasValidApiKey: false));
+  testWidgets('AI зөвлөх өөрийн загвараар багцын шинжилгээ гаргана',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final auth = StreamController<String?>();
+    final portfolio = PortfolioProvider(remote: FakeRemote(), userIds: auth.stream);
+    auth.add('u1');
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AdvisorProvider()),
+          ChangeNotifierProvider.value(value: portfolio),
+          ChangeNotifierProvider(create: (_) => UserPreferencesProvider()),
+          // start() дуудахгүй тул сүлжээнд хандахгүй
+          ChangeNotifierProvider(create: (_) => MseMarketProvider()),
+        ],
+        child: MaterialApp(home: PortfolioSuggestionsScreen()),
+      ),
+    );
+    // assets/ai/signals.json ачаалагдах хүртэл
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    expect(find.text('Санал болгох багц боловсруулах'), findsOneWidget);
+    expect(find.textContaining('Тест AUC'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.ensureVisible(find.text('Санал болгох багц боловсруулах'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Санал болгох багц боловсруулах'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Багцын эрүүл мэнд'), findsOneWidget);
+    expect(find.text('Зорилтот хуваарилалт'), findsOneWidget);
+    // Зөвлөгөөнүүд жагсаалтын доор байрлана
+    await tester.scrollUntilVisible(
+      find.textContaining('ширхэг авах'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('ширхэг авах'), findsWidgets);
   });
 }

@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Байршуулах: firebase deploy --only firestore:rules
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Хэрэглэгчийн профайл: зөвхөн өөрөө. role-ийг өөрөө өөрчилж болохгүй.
+    match /users/{uid} {
+      allow read, delete: if isOwner(uid);
+      allow create: if isOwner(uid) && request.resource.data.role == 'user';
+      allow update: if isOwner(uid)
+                    && request.resource.data.role == resource.data.role;
+
+      // Симуляцийн багц (PortfolioProvider)
+      match /portfolio/{docId} {
+        allow read, write: if isOwner(uid);
+      }
+    }
+
+    // AI чатын түүх: зөвхөн өөрийн мессеж
+    match /chat_history/{id} {
+      allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // Бусад бүх зам хаалттай
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
