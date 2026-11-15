@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../models/holding.dart';
+import '../models/mse_quote.dart';
+import '../providers/mse_market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../services/market_data_service.dart';
 import '../services/trading_service.dart';
@@ -27,35 +31,6 @@ class _MarketScreenState extends State<MarketScreen>
   String lastUpdated = '';
   final _storage = FlutterSecureStorage();
   final TradingService _tradingService = TradingService();
-
-  // List of tradable stocks
-  final List<Map<String, dynamic>> tradableStocks = [
-    {'symbol': 'ARRD', 'name': 'Ард санхүүгийн нэгдэл ХК.', 'price': 2380.0},
-    {'symbol': 'ADB', 'name': 'Ард кредит ББСБ ХК.', 'price': 108.0},
-    {'symbol': 'APU', 'name': 'АПУ ХК.', 'price': 980.0},
-    {'symbol': 'BDS', 'name': 'Би ди сек ХК.', 'price': 1450.0},
-    {'symbol': 'BODI', 'name': 'Бодь Даатгал ХК.', 'price': 82.0},
-    {'symbol': 'GAZR', 'name': 'Газар Шим Үйлдвэр ХК.', 'price': 45.0},
-    {'symbol': 'GLMT', 'name': 'Говь ХК.', 'price': 270.0},
-    {'symbol': 'GOV', 'name': 'Голомт Банк ХК.', 'price': 1033.0},
-    {'symbol': 'INV', 'name': 'Инвескор ББСБ ХК.', 'price': 9580.0},
-    {'symbol': 'KHAN', 'name': 'Хаан банк ХК .', 'price': 1071.0},
-    {'symbol': 'LEND', 'name': 'ЛэндМН ББСБ ХК.', 'price': 148.0},
-
-    {'symbol': 'MFC', 'name': 'Монос хүнс ХК.', 'price': 81.0},
-    {'symbol': 'MNDL', 'name': 'Мандал Даатгал ХК.', 'price': 70.0},
-    {'symbol': 'MIK', 'name': 'Мик холдинг ХК.', 'price': 12000.0},
-    {'symbol': 'MSE', 'name': 'Монголын хөрөнгийн бирж ХК.', 'price': 288.10},
-    {'symbol': 'NEH', 'name': 'Дархан нэхий ХК.', 'price': 24.0},
-    {'symbol': 'SBM', 'name': 'Төрийн Банк ХК.', 'price': 437.0},
-    {'symbol': 'SUU', 'name': 'Сүү ХК.', 'price': 609.0},
-    {'symbol': 'TCK', 'name': 'Талх чихэр ХК.', 'price': 28500.0},
-    {'symbol': 'TDB', 'name': 'Худалдаа Хөгжлийн банк.', 'price': 22980.0},
-    {'symbol': 'TTL', 'name': 'Таван толгой ХК.', 'price': 29060.0},
-    {'symbol': 'TUM', 'name': 'Түмэн шувуут ХК.', 'price': 360.0},
-    {'symbol': 'XAC', 'name': 'Хас Банк .', 'price': 850.0},
-
-  ];
 
   // List of tradable crypto
   final List<Map<String, dynamic>> tradableCrypto = [
@@ -139,10 +114,8 @@ class _MarketScreenState extends State<MarketScreen>
 
     try {
       if (currentTab == 0) {
-        // Refresh stocks (increment the counter to force TradingView refresh)
-        setState(() {
-          refreshCounter++;
-        });
+        // MSE-ийн бодит ханшийг дахин татах
+        await context.read<MseMarketProvider>().refresh();
       } else if (currentTab == 1) {
         // Refresh crypto
         setState(() {
@@ -272,114 +245,291 @@ class _MarketScreenState extends State<MarketScreen>
     );
   }
 
+  static final NumberFormat _money = NumberFormat('#,##0.##', 'en_US');
+  static final NumberFormat _count = NumberFormat('#,##0', 'en_US');
+  static final NumberFormat _compact = NumberFormat.compact(locale: 'en_US');
+
+  /// Хувьцааны таб: Монголын хөрөнгийн биржийн бодит ханш (open.mse.mn).
   Widget _buildStocksTab({Key? key}) {
-    return ListView.builder(
-      key: key,
-      physics: AlwaysScrollableScrollPhysics(), // Ensure pull-to-refresh works
-      itemCount: tradableStocks.length + 3, // stocks + header + 2 charts
-      itemBuilder: (context, index) {
-        // Header with last updated
-        if (index == 0) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Consumer<MseMarketProvider>(
+      builder: (context, mse, _) {
+        final stocks = mse.visibleSecurities;
+        if (mse.isLoading && stocks.isEmpty) {
+          return ListView(
+            key: key,
+            physics: AlwaysScrollableScrollPhysics(),
             children: [
-              if (lastUpdated.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    'Сүүлд шинэчлэгдсэн: $lastUpdated${isMockData ? ' (Demo)' : ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: isMockData ? Colors.orange : Colors.grey,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text(
-                  'Нийтлэг хувьцаа',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
+              SizedBox(height: 160),
+              Center(child: CircularProgressIndicator()),
+              SizedBox(height: 12),
+              Center(child: Text('MSE-ээс ханш татаж байна...')),
             ],
           );
         }
 
-        // Stocks
-        if (index > 0 && index <= tradableStocks.length) {
-          final stock = tradableStocks[index - 1];
-          return _buildTradableAssetCard(
-            symbol: stock['symbol'],
-            name: stock['name'],
-            price: stock['price'],
-            isStock: true,
-          );
-        }
-
-        // S&P 500 chart
-        if (index == tradableStocks.length + 1) {
-          // return Container(
-          //   height: 350,
-          //   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          //   child: Card(
-          //     elevation: 4,
-          //     child: Padding(
-          //       padding: EdgeInsets.all(8.0),
-          //       child: Column(
-          //         crossAxisAlignment: CrossAxisAlignment.start,
-          //         children: [
-          //           Text(
-          //             'S&P 500',
-          //             style: Theme.of(context).textTheme.titleMedium,
-          //           ),
-          //           SizedBox(height: 8),
-          //           Expanded(
-          //             child: TradingViewMobileWidget(
-          //               symbol: 'SPY',
-          //               isStockChart: true,
-          //               useMockData: isMockData,
-          //               liveData: liveMarketData,
-          //             ),
-          //           ),
-          //         ],
-          //       ),
-          //     ),
-          //   ),
-          // );
-        }
-
-        // Apple chart
-        // return Container(
-        //   height: 350,
-        //   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        //   child: Card(
-        //     elevation: 4,
-        //     child: Padding(
-        //       padding: EdgeInsets.all(8.0),
-        //       child: Column(
-        //         crossAxisAlignment: CrossAxisAlignment.start,
-        //         children: [
-        //           Text(
-        //             'АПУ ХК.',
-        //             style: Theme.of(context).textTheme.titleMedium,
-        //           ),
-        //           SizedBox(height: 8),
-        //           Expanded(
-        //             child: TradingViewMobileWidget(
-        //               symbol: 'APU',
-        //               isStockChart: true,
-        //               useMockData: isMockData,
-        //               liveData: liveMarketData,
-        //             ),
-        //           ),
-        //         ],
-        //       ),
-        //     ),
-        //   ),
-        // );
+        return ListView.builder(
+          key: key,
+          physics: AlwaysScrollableScrollPhysics(), // Ensure pull-to-refresh works
+          itemCount: stocks.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) return _buildMseHeader(mse);
+            final security = stocks[index - 1];
+            final quote = mse.quoteFor(security.symbol);
+            return _buildTradableAssetCard(
+              symbol: security.symbol,
+              name: security.name,
+              price: quote?.price ?? 0,
+              isStock: true,
+              changePercent: quote?.changePercent,
+              onTap: () => _showStockDetails(security),
+            );
+          },
+        );
       },
+    );
+  }
+
+  Widget _buildMseHeader(MseMarketProvider mse) {
+    final marketOpen = mse.isMarketOpen;
+    final updated = mse.lastUpdated;
+    final updatedText = updated == null
+        ? ''
+        : ' · Шинэчлэгдсэн: ${DateFormat('HH:mm:ss').format(updated)}';
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.circle,
+                  size: 10, color: marketOpen ? Colors.green : Colors.grey),
+              SizedBox(width: 6),
+              Text(
+                marketOpen
+                    ? 'Арилжаа явагдаж байна (1 мин тутам шинэчилнэ)'
+                    : 'Арилжаа хаалттай · сүүлийн арилжааны ханш',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              Spacer(),
+              if (mse.isRefreshing)
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Эх сурвалж: open.mse.mn$updatedText',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          if (mse.error != null) ...[
+            SizedBox(height: 8),
+            Text(mse.error!, style: TextStyle(color: Colors.red, fontSize: 12)),
+          ],
+          SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final c in [1, 2, 3])
+                ChoiceChip(
+                  label: Text('${['I', 'II', 'III'][c - 1]} ангилал'),
+                  selected: mse.category == c,
+                  onSelected: (_) => mse.setCategory(c),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Хувьцааны дэлгэрэнгүй: бүх арилжааны үзүүлэлт + 3 сарын график.
+  void _showStockDetails(MseSecurity security) {
+    final mse = context.read<MseMarketProvider>();
+    final historyFuture = mse.historyFor(security.symbol);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.8,
+        maxChildSize: 0.95,
+        builder: (ctx, scrollController) => Consumer<MseMarketProvider>(
+          builder: (ctx, mse, _) {
+            final q = mse.quoteFor(security.symbol);
+            return ListView(
+              controller: scrollController,
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+              children: [
+                Text(security.name, style: Theme.of(ctx).textTheme.titleLarge),
+                Text(
+                  '${security.symbol}${q != null && q.isin.isNotEmpty ? ' · ${q.isin}' : ''}',
+                  style: TextStyle(color: Colors.grey),
+                ),
+                SizedBox(height: 12),
+                if (q == null)
+                  Text('Ханш хараахан ирээгүй байна.')
+                else ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${_money.format(q.price)}₮',
+                        style: Theme.of(ctx)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        '${q.change > 0 ? '+' : ''}${_money.format(q.change)} '
+                        '(${q.changePercent > 0 ? '+' : ''}${q.changePercent.toStringAsFixed(2)}%)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: q.change > 0
+                              ? Colors.green
+                              : q.change < 0
+                                  ? Colors.red
+                                  : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 12),
+                  _detailRow('Өмнөх хаалт', '${_money.format(q.previousClose)}₮'),
+                  _detailRow('Нээлт', '${_money.format(q.open)}₮'),
+                  _detailRow('Өдрийн хязгаар',
+                      '${_money.format(q.dayLow)} – ${_money.format(q.dayHigh)}₮'),
+                  _detailRow('VWAP', '${_money.format(q.vwap)}₮'),
+                  _detailRow('Авах дээд үнэ',
+                      '${_money.format(q.bidPrice)}₮ × ${_count.format(q.bidQty)}'),
+                  _detailRow('Зарах доод үнэ',
+                      '${_money.format(q.askPrice)}₮ × ${_count.format(q.askQty)}'),
+                  _detailRow('Арилжигдсан ширхэг', _count.format(q.volume)),
+                  _detailRow('Арилжааны дүн', '${_count.format(q.turnover)}₮'),
+                  _detailRow('Хэлцлийн тоо', _count.format(q.trades)),
+                  _detailRow('52 долоо хоног',
+                      '${_money.format(q.week52Low)} – ${_money.format(q.week52High)}₮'),
+                  _detailRow('Зах зээлийн үнэлгээ', '${_compact.format(q.marketCap)}₮'),
+                ],
+                SizedBox(height: 20),
+                Text('Сүүлийн 3 сарын хаалтын ханш',
+                    style: Theme.of(ctx).textTheme.titleMedium),
+                SizedBox(height: 12),
+                SizedBox(
+                  height: 220,
+                  child: FutureBuilder<List<MseDailyBar>>(
+                    future: historyFuture,
+                    builder: (ctx, snap) {
+                      if (snap.connectionState != ConnectionState.done) {
+                        return Center(child: CircularProgressIndicator());
+                      }
+                      if (snap.hasError) {
+                        return Center(
+                            child: Text('График татаж чадсангүй: ${snap.error}'));
+                      }
+                      return _buildHistoryChart(snap.data ?? []);
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: TextStyle(color: Colors.grey[700]))),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryChart(List<MseDailyBar> allBars) {
+    final cutoff = DateTime.now().subtract(Duration(days: 92));
+    var bars = allBars.where((b) => b.date.isAfter(cutoff)).toList();
+    if (bars.length < 2) {
+      // Сүүлийн 3 сард арилжаа бага байсан бол сүүлийн 60 арилжааг харуулна.
+      bars = allBars.length > 60 ? allBars.sublist(allBars.length - 60) : allBars;
+    }
+    if (bars.length < 2) {
+      return Center(child: Text('Арилжааны түүх хангалтгүй байна'));
+    }
+
+    final up = bars.last.close >= bars.first.close;
+    final color = up ? Colors.green : Colors.red;
+    final labelEvery = (bars.length / 4).ceilToDouble();
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: true, drawVerticalLine: false),
+        borderData: FlBorderData(show: false),
+        titlesData: FlTitlesData(
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 44,
+              getTitlesWidget: (value, meta) => Text(
+                _compact.format(value),
+                style: TextStyle(fontSize: 10),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: labelEvery,
+              getTitlesWidget: (value, meta) {
+                final i = value.toInt();
+                if (i < 0 || i >= bars.length) return SizedBox.shrink();
+                return Text(
+                  DateFormat('MM/dd').format(bars[i].date),
+                  style: TextStyle(fontSize: 10),
+                );
+              },
+            ),
+          ),
+        ),
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (spots) => spots
+                .map((s) => LineTooltipItem(
+                      '${DateFormat('yyyy-MM-dd').format(bars[s.x.toInt()].date)}\n'
+                      '${_money.format(s.y)}₮',
+                      TextStyle(color: Colors.white, fontSize: 12),
+                    ))
+                .toList(),
+          ),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: [
+              for (var i = 0; i < bars.length; i++)
+                FlSpot(i.toDouble(), bars[i].close),
+            ],
+            color: color,
+            barWidth: 2,
+            dotData: FlDotData(show: false),
+            belowBarData: BarAreaData(show: true, color: color.withOpacity(0.12)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -645,13 +795,19 @@ class _MarketScreenState extends State<MarketScreen>
     required String name,
     required double price,
     required bool isStock,
+    double? changePercent,
+    VoidCallback? onTap,
   }) {
-    // Generate random price change percentage between -3.0% and +3.0%
-    final priceChange = (DateTime.now().millisecondsSinceEpoch % 6) - 3.0;
+    // Бодит өөрчлөлт мэдэгдэхгүй бол (жишээ нь крипто) хувийг харуулахгүй.
+    final priceChange = changePercent;
+    final canTrade = price > 0;
 
     return Card(
       margin: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Padding(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
         padding: EdgeInsets.all(12),
         child: Column(
           children: [
@@ -684,15 +840,20 @@ class _MarketScreenState extends State<MarketScreen>
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      '${price.toStringAsFixed(2)}\₮',
+                      canTrade ? '${_money.format(price)}\₮' : '—',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    Text(
-                      '${priceChange >= 0 ? '+' : ''}${priceChange.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                        color: priceChange >= 0 ? Colors.green : Colors.red,
+                    if (priceChange != null)
+                      Text(
+                        '${priceChange > 0 ? '+' : ''}${priceChange.toStringAsFixed(2)}%',
+                        style: TextStyle(
+                          color: priceChange > 0
+                              ? Colors.green
+                              : priceChange < 0
+                                  ? Colors.red
+                                  : Colors.grey,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -709,7 +870,7 @@ class _MarketScreenState extends State<MarketScreen>
                       backgroundColor: Colors.green,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: () {
+                    onPressed: !canTrade ? null : () {
                       _showTradeDialog(
                         context: context,
                         symbol: symbol,
@@ -730,7 +891,7 @@ class _MarketScreenState extends State<MarketScreen>
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                     ),
-                    onPressed: () {
+                    onPressed: !canTrade ? null : () {
                       _showTradeDialog(
                         context: context,
                         symbol: symbol,
@@ -745,6 +906,7 @@ class _MarketScreenState extends State<MarketScreen>
             ),
           ],
         ),
+      ),
       ),
     );
   }

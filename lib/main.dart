@@ -14,6 +14,8 @@ import 'screen/ai_financial_screen.dart';
 import 'services/api_key_service.dart';
 import 'services/market_data_service.dart';
 import 'providers/portfolio_provider.dart';
+import 'providers/mse_market_provider.dart';
+import 'providers/advisor_provider.dart';
 import 'providers/user_preferences_provider.dart';
 import 'providers/investment_agent_provider.dart';
 import 'screen/portfolio_suggestions_screen.dart';
@@ -36,6 +38,10 @@ void main() async {
   // Create the market data service
   final marketDataService = MarketDataService();
   await marketDataService.initialize();
+
+  // Монголын хөрөнгийн биржийн бодит ханш (open.mse.mn, үнэгүй)
+  final mseMarket = MseMarketProvider();
+  mseMarket.start();
 
   runApp(
     MultiProvider(
@@ -61,11 +67,31 @@ void main() async {
         Provider<MarketDataService>.value(
           value: marketDataService,
         ),
+        // MSE-ийн бодит ханш
+        ChangeNotifierProvider<MseMarketProvider>.value(
+          value: mseMarket,
+        ),
+        // Өөрийн AI зөвлөх (Gemini-гүй)
+        ChangeNotifierProvider<AdvisorProvider>(
+          create: (_) => AdvisorProvider()..load(),
+        ),
         // Add portfolio provider
         ChangeNotifierProxyProvider<MarketDataService, PortfolioProvider>(
-          create: (context) => PortfolioProvider(
-            marketDataService: context.read<MarketDataService>(),
-          )..addSampleHoldings(), // Initialize with sample data
+          create: (context) {
+            final portfolio = PortfolioProvider(
+              marketDataService: context.read<MarketDataService>(),
+            )..addSampleHoldings(); // Initialize with sample data
+
+            // Багцын хувьцааны ханшийг MSE-ээс байнга шинэчилж байх
+            void trackHoldings() => mseMarket
+                .trackSymbols(portfolio.holdings.map((h) => h.symbol));
+            trackHoldings();
+            portfolio.addListener(trackHoldings);
+            mseMarket.addListener(
+              () => portfolio.updateLivePrices(mseMarket.lastPrices),
+            );
+            return portfolio;
+          },
           update: (context, marketDataService, previous) => previous!,
         ),
         // Add user preferences provider

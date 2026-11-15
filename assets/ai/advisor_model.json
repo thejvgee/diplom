@@ -1,0 +1,519 @@
+{
+  "type": "logistic_regression",
+  "features": [
+    "ret5",
+    "ret20",
+    "ret60",
+    "vol20",
+    "vol60",
+    "rsi14",
+    "ma20gap",
+    "ma60gap",
+    "dd60",
+    "volumeRatio",
+    "liquidity"
+  ],
+  "means": [
+    0.005102098337833327,
+    0.020880100647536867,
+    0.15106228441007027,
+    0.03426677657004624,
+    0.03627886861413042,
+    -0.0017936243228375984,
+    0.005344916982852431,
+    0.018619503047733223,
+    -0.12084811483962017,
+    -0.6221847154396997,
+    0.7251846085372621
+  ],
+  "stds": [
+    0.08200706135480146,
+    0.20177027057665087,
+    3.7254674035188886,
+    0.02211427034401448,
+    0.019727900505225934,
+    0.1656730918464791,
+    0.08498217770648142,
+    0.16789891785540317,
+    0.10849516789580223,
+    1.3225115243031056,
+    0.2704286973290884
+  ],
+  "weights": [
+    -0.05556355306354261,
+    -0.0296405025466659,
+    -0.06694933325602224,
+    -0.019474589481556694,
+    -0.004793552587121124,
+    0.09984457425014669,
+    -0.27169824066493486,
+    0.1870034000291696,
+    -0.05760512966271813,
+    0.1411489095115541,
+    0.014695434560916496
+  ],
+  "bias": -0.15079819014210846,
+  "metrics": {
+    "trainedAt": "2026-11-15T20:42:27.484511",
+    "horizonDays": 30,
+    "stocks": 65,
+    "samples": 86496,
+    "trainSamples": 57994,
+    "testSamples": 27646,
+    "testPeriodStart": "2024-01-01",
+    "trainAuc": 0.5749,
+    "testAuc": 0.5603,
+    "testAccuracy": 0.5262,
+    "baselineAccuracy": 0.5148,
+    "testBaseRateUp": 0.4852,
+    "baseRateUp": 0.4632,
+    "quintiles": [
+      {
+        "probFrom": 0.0764,
+        "probTo": 0.4183,
+        "avgForwardReturn": -0.0013,
+        "upRate": 0.3921
+      },
+      {
+        "probFrom": 0.4183,
+        "probTo": 0.442,
+        "avgForwardReturn": 0.01,
+        "upRate": 0.4659
+      },
+      {
+        "probFrom": 0.442,
+        "probTo": 0.46,
+        "avgForwardReturn": 0.0156,
+        "upRate": 0.5106
+      },
+      {
+        "probFrom": 0.46,
+        "probTo": 0.4817,
+        "avgForwardReturn": 0.0206,
+        "upRate": 0.5165
+      },
+      {
+        "probFrom": 0.4817,
+        "probTo": 0.7993,
+        "avgForwardReturn": 0.0283,
+        "upRate": 0.541
+      }
+    ],
+    "backtest": {
+      "months": 34,
+      "strategyTotalReturn": 0.5307,
+      "benchmarkTotalReturn": 0.2786,
+      "monthsBeatBenchmark": 20,
+      "rows": [
+        {
+          "month": "2024-01",
+          "strategy": -0.0363,
+          "benchmark": -0.0621,
+          "picks": [
+            "INV",
+            "UID",
+            "SEND",
+            "XAC",
+            "TDB"
+          ]
+        },
+        {
+          "month": "2024-02",
+          "strategy": 0.1383,
+          "benchmark": 0.0279,
+          "picks": [
+            "JTB",
+            "TTL",
+            "TAND",
+            "MLG",
+            "XAC"
+          ]
+        },
+        {
+          "month": "2024-03",
+          "strategy": 0.0416,
+          "benchmark": 0.0028,
+          "picks": [
+            "TAND",
+            "LEND",
+            "TTL",
+            "ADB",
+            "SUU"
+          ]
+        },
+        {
+          "month": "2024-04",
+          "strategy": 0.0854,
+          "benchmark": 0.0156,
+          "picks": [
+            "UID",
+            "MNDL",
+            "TTL",
+            "INV",
+            "MSE"
+          ]
+        },
+        {
+          "month": "2024-05",
+          "strategy": -0.0251,
+          "benchmark": 0.0038,
+          "picks": [
+            "MNDL",
+            "CNF",
+            "TTL",
+            "AIC",
+            "SEND"
+          ]
+        },
+        {
+          "month": "2024-06",
+          "strategy": 0.0506,
+          "benchmark": 0.0273,
+          "picks": [
+            "MSE",
+            "CUMN",
+            "SEND",
+            "SUU",
+            "UID"
+          ]
+        },
+        {
+          "month": "2024-07",
+          "strategy": 0.0176,
+          "benchmark": 0.0627,
+          "picks": [
+            "TDB",
+            "SUU",
+            "INV",
+            "MFC",
+            "QPAY"
+          ]
+        },
+        {
+          "month": "2024-08",
+          "strategy": -0.0313,
+          "benchmark": -0.0135,
+          "picks": [
+            "BODI",
+            "MSE",
+            "TTL",
+            "QPAY",
+            "CNF"
+          ]
+        },
+        {
+          "month": "2024-09",
+          "strategy": 0.0329,
+          "benchmark": 0.0077,
+          "picks": [
+            "MGLA",
+            "UID",
+            "TAND",
+            "LEND",
+            "QPAY"
+          ]
+        },
+        {
+          "month": "2024-10",
+          "strategy": 0.0097,
+          "benchmark": 0.0186,
+          "picks": [
+            "JTB",
+            "AARD",
+            "SEND",
+            "GOV",
+            "INV"
+          ]
+        },
+        {
+          "month": "2024-11",
+          "strategy": -0.0122,
+          "benchmark": 0.0217,
+          "picks": [
+            "ITLS",
+            "ERDN",
+            "MFC",
+            "TDB",
+            "UID"
+          ]
+        },
+        {
+          "month": "2024-12",
+          "strategy": 0.0559,
+          "benchmark": 0.0416,
+          "picks": [
+            "MBW",
+            "MNP",
+            "TTL",
+            "MNDL",
+            "MLG"
+          ]
+        },
+        {
+          "month": "2025-01",
+          "strategy": -0.0417,
+          "benchmark": -0.0036,
+          "picks": [
+            "AARD",
+            "ADB",
+            "MLG",
+            "BODI",
+            "BAN"
+          ]
+        },
+        {
+          "month": "2025-02",
+          "strategy": -0.0369,
+          "benchmark": 0.0006,
+          "picks": [
+            "CNF",
+            "SHG",
+            "TTL",
+            "BAN",
+            "ITLS"
+          ]
+        },
+        {
+          "month": "2025-03",
+          "strategy": -0.1528,
+          "benchmark": -0.0773,
+          "picks": [
+            "CNF",
+            "LEND",
+            "JTB",
+            "BAN",
+            "SUU"
+          ]
+        },
+        {
+          "month": "2025-04",
+          "strategy": 0.0635,
+          "benchmark": 0.0086,
+          "picks": [
+            "JTB",
+            "MSE",
+            "SHG",
+            "MGLA",
+            "TGI"
+          ]
+        },
+        {
+          "month": "2025-05",
+          "strategy": -0.0042,
+          "benchmark": -0.0157,
+          "picks": [
+            "MLG",
+            "HRM",
+            "SHG",
+            "UID",
+            "SBM"
+          ]
+        },
+        {
+          "month": "2025-06",
+          "strategy": 0.0036,
+          "benchmark": 0.0129,
+          "picks": [
+            "MGLA",
+            "MLG",
+            "ERDN",
+            "SUU",
+            "INV"
+          ]
+        },
+        {
+          "month": "2025-07",
+          "strategy": 0.0068,
+          "benchmark": -0.0034,
+          "picks": [
+            "BODI",
+            "NEH",
+            "MNDL",
+            "MGLA",
+            "AIC"
+          ]
+        },
+        {
+          "month": "2025-08",
+          "strategy": -0.0151,
+          "benchmark": -0.0166,
+          "picks": [
+            "XAC",
+            "QPAY",
+            "KHAN",
+            "SEND",
+            "APU"
+          ]
+        },
+        {
+          "month": "2025-09",
+          "strategy": 0.0271,
+          "benchmark": 0.0125,
+          "picks": [
+            "TGI",
+            "GLMT",
+            "KHAN",
+            "UID",
+            "MFC"
+          ]
+        },
+        {
+          "month": "2025-10",
+          "strategy": 0.019,
+          "benchmark": -0.0003,
+          "picks": [
+            "ITLS",
+            "MSE",
+            "MBW",
+            "MMX",
+            "BODI"
+          ]
+        },
+        {
+          "month": "2025-11",
+          "strategy": 0.0316,
+          "benchmark": 0.0411,
+          "picks": [
+            "SUU",
+            "KHAN",
+            "MNDL",
+            "NEH",
+            "ADB"
+          ]
+        },
+        {
+          "month": "2025-12",
+          "strategy": -0.0101,
+          "benchmark": 0.0394,
+          "picks": [
+            "CUMN",
+            "UID",
+            "TDB",
+            "KHAN",
+            "TTL"
+          ]
+        },
+        {
+          "month": "2026-01",
+          "strategy": -0.0518,
+          "benchmark": -0.0147,
+          "picks": [
+            "GLMT",
+            "KHAN",
+            "AARD",
+            "ADB",
+            "MLG"
+          ]
+        },
+        {
+          "month": "2026-02",
+          "strategy": -0.0122,
+          "benchmark": -0.0095,
+          "picks": [
+            "NEH",
+            "UID",
+            "TCK",
+            "ERDN",
+            "TTL"
+          ]
+        },
+        {
+          "month": "2026-03",
+          "strategy": 0.0239,
+          "benchmark": -0.0384,
+          "picks": [
+            "MBW",
+            "MGLA",
+            "MNDL",
+            "QPAY",
+            "MFC"
+          ]
+        },
+        {
+          "month": "2026-04",
+          "strategy": 0.0009,
+          "benchmark": 0.0005,
+          "picks": [
+            "JTB",
+            "KHAN",
+            "MSE",
+            "INV",
+            "MCH"
+          ]
+        },
+        {
+          "month": "2026-05",
+          "strategy": 0.012,
+          "benchmark": 0.0069,
+          "picks": [
+            "ADB",
+            "AARD",
+            "MCH",
+            "MSE",
+            "TDB"
+          ]
+        },
+        {
+          "month": "2026-06",
+          "strategy": 0.0129,
+          "benchmark": 0.0035,
+          "picks": [
+            "INV",
+            "KHAN",
+            "AIC",
+            "MNP",
+            "HRM"
+          ]
+        },
+        {
+          "month": "2026-07",
+          "strategy": 0.0901,
+          "benchmark": 0.0328,
+          "picks": [
+            "MGLA",
+            "RMC",
+            "KHAN",
+            "AIC",
+            "TTL"
+          ]
+        },
+        {
+          "month": "2026-08",
+          "strategy": 0.0234,
+          "benchmark": 0.049,
+          "picks": [
+            "TDB",
+            "MBG",
+            "SEND",
+            "MMX",
+            "MNP"
+          ]
+        },
+        {
+          "month": "2026-09",
+          "strategy": 0.085,
+          "benchmark": 0.063,
+          "picks": [
+            "TTL",
+            "MSE",
+            "TUM",
+            "SUU",
+            "TDB"
+          ]
+        },
+        {
+          "month": "2026-10",
+          "strategy": 0.0712,
+          "benchmark": 0.0165,
+          "picks": [
+            "TTL",
+            "AARD",
+            "GLMT",
+            "TDB",
+            "KHAN"
+          ]
+        }
+      ]
+    }
+  }
+}

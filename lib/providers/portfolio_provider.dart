@@ -243,19 +243,27 @@ class PortfolioProvider extends ChangeNotifier {
   Future<double> getTotalPortfolioValue() async {
     double totalValue = _cashBalance;
 
-    // This could be optimized to batch fetch current prices
+    // currentPrice-г MseMarketProvider-оос ирсэн бодит ханшаар шинэчилдэг
+    // (updateLivePrices). Ханш хараахан ирээгүй бол дундаж өртгөөр тооцно.
     for (var holding in _holdings) {
-      try {
-        // In a real app, mse gees api ogwol fetch hiine
-        // For now, we'll use a mock price (current price = average cost * random factor)
-        final currentPrice = holding.averageCost * (0.9 + (0.2 * (DateTime.now().millisecondsSinceEpoch % 100) / 100));
-        totalValue += holding.quantity * currentPrice;
-      } catch (e) {
-        totalValue += holding.totalCost;
-      }
+      final price =
+          holding.currentPrice > 0 ? holding.currentPrice : holding.averageCost;
+      totalValue += holding.quantity * price;
     }
 
     return totalValue;
+  }
+
+  /// MSE-ээс ирсэн сүүлийн ханшаар багцын хувьцаануудын одоогийн үнийг шинэчилнэ.
+  void updateLivePrices(Map<String, double> prices) {
+    var changed = false;
+    _holdings = _holdings.map((h) {
+      final price = prices[h.symbol];
+      if (price == null || price <= 0 || price == h.currentPrice) return h;
+      changed = true;
+      return h.copyWith(currentPrice: price);
+    }).toList();
+    if (changed) notifyListeners();
   }
 
   Map<String, double> getPortfolioPerformance() {
