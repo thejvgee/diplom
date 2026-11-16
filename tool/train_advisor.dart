@@ -112,6 +112,7 @@ Future<void> main() async {
   }
 
   final backtest = runBacktest(test, model);
+  final market = marketStats(histories);
 
   // --- Эцсийн загвар: бүх өгөгдлөөр дахин сургана ---------------------------
   final finalModel = LogisticModel.train(
@@ -138,6 +139,8 @@ Future<void> main() async {
       for (final q in quintiles) {for (final e in q.entries) e.key: _r(e.value)}
     ],
     'backtest': backtest,
+    // Зорилгын төлөвлөгчид: MSE-ийн тэнцүү жинтэй хувьцааны сарын өгөөж
+    'market': market,
   };
   final deployed = finalModel.withMetrics(metrics);
 
@@ -172,7 +175,7 @@ Future<void> main() async {
       drawdown60: x[8],
       liquidity: x[10],
       rsi: (x[5] + 0.5) * 100,
-      drivers: {for (final t in top.take(3)) t.key: t.value},
+      drivers: {for (final t in top) t.key: t.value},
       features: {
         for (var k = 0; k < FeatureExtractor.names.length; k++)
           FeatureExtractor.names[k]: x[k],
@@ -189,6 +192,7 @@ Future<void> main() async {
     modelMetrics: {
       for (final k in ['trainedAt', 'testAuc', 'testAccuracy', 'baselineAccuracy', 'baseRateUp', 'horizonDays', 'stocks', 'samples'])
         k: metrics[k],
+      'market': market,
       'backtest': {
         for (final k in ['months', 'strategyTotalReturn', 'benchmarkTotalReturn', 'monthsBeatBenchmark'])
           k: backtest[k],
@@ -213,11 +217,57 @@ Future<void> main() async {
       'жишиг ${(backtest['benchmarkTotalReturn'] * 100).toStringAsFixed(1)}%, '
       'жишгээс давсан сар ${backtest['monthsBeatBenchmark']}');
   stdout.writeln('Дохио: ${signals.length} хувьцаа (алгассан: ${skipped.join(', ')})');
+  stdout.writeln('Зах зээл (${market['since']}–, ${market['months']} сар): '
+      'жилийн өгөөж ${((market['annualReturn'] as double) * 100).toStringAsFixed(1)}%, '
+      'хэлбэлзэл ${((market['annualVol'] as double) * 100).toStringAsFixed(1)}%');
 }
 
 /// Сар бүрийн эхэнд хөрвөх чадвартай хувьцаанаас загварын магадлал хамгийн
 /// өндөр 5-ыг тэнцүү жинтэй авч 30 хоног барина. Жишиг: бүх хөрвөх чадвартай
 /// хувьцааг тэнцүү жинтэй барих. (Шимтгэл тооцоогүй.)
+/// MSE-ийн I, II ангиллын хувьцааны тэнцүү жинтэй (сар бүр тэнцвэржүүлсэн)
+/// сарын өгөөжийн статистик. Зорилгын төлөвлөгчийн Monte Carlo-д ашиглана.
+Map<String, dynamic> marketStats(Map<String, List<MseDailyBar>> histories,
+    {int years = 10}) {
+  final since = DateTime(DateTime.now().year - years, DateTime.now().month);
+  // хувьцаа → (сарын түлхүүр → тухайн сарын сүүлийн бар)
+  final monthEnd = <String, Map<int, MseDailyBar>>{};
+  for (final e in histories.entries) {
+    final m = <int, MseDailyBar>{};
+    for (final b in e.value) {
+      if (b.date.isBefore(since)) continue;
+      m[b.date.year * 12 + b.date.month - 1] = b;
+    }
+    monthEnd[e.key] = m;
+  }
+  final keys = monthEnd.values.expand((m) => m.keys).toSet().toList()..sort();
+  final monthly = <double>[];
+  for (var i = 1; i < keys.length; i++) {
+    final prevKey = keys[i] - 1;
+    final rets = <double>[];
+    for (final m in monthEnd.values) {
+      final a = m[prevKey], b = m[keys[i]];
+      if (a == null || b == null || a.close <= 0) continue;
+      final r = b.close / a.close - 1;
+      if (r.abs() <= 0.6) rets.add(r); // хувьцаа хуваах зэрэг гажуудлыг хасна
+    }
+    if (rets.length >= 8) monthly.add(rets.reduce((x, y) => x + y) / rets.length);
+  }
+  final n = monthly.length;
+  final mean = monthly.reduce((a, b) => a + b) / n;
+  final vol = math.sqrt(
+      monthly.map((r) => (r - mean) * (r - mean)).reduce((a, b) => a + b) / (n - 1));
+  final growth = monthly.fold<double>(1, (g, r) => g * (1 + r));
+  return {
+    'since': '${since.year}-${since.month.toString().padLeft(2, '0')}',
+    'months': n,
+    'monthlyMean': _r(mean),
+    'monthlyVol': _r(vol),
+    'annualReturn': _r(math.pow(growth, 12 / n) - 1),
+    'annualVol': _r(vol * math.sqrt(12)),
+  };
+}
+
 Map<String, dynamic> runBacktest(List<Sample> test, LogisticModel model) {
   final byMonth = <String, Map<String, Sample>>{};
   for (final s in test) {

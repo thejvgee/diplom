@@ -6,9 +6,12 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ai_engine/risk_profile.dart';
 import '../providers/app_state.dart';
+import '../providers/mse_market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/user_preferences_provider.dart';
+import 'auth_gate.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -20,26 +23,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isLoading = true;
   final _formKey = GlobalKey<FormState>();
 
-  // Additional settings
-  bool _enableNotifications = true;
-  bool _enableMarketAlerts = true;
-  bool _enablePortfolioUpdates = true;
-  String _refreshInterval = '15 minutes';
-  String _selectedCurrency = 'MNT';
+  // Ханшийн шинэчлэлийн давтамж (MseMarketProvider-т шууд нөлөөлнө)
+  String _refreshInterval = MseMarketProvider.defaultRefreshOption;
   TextEditingController _nameController = TextEditingController();
   TextEditingController _emailController = TextEditingController();
 
-  // List of available currencies
-  final List<String> _currencies = ['USD', 'EUR', 'MNT'];
-
-  // List of refresh intervals
-  final List<String> _refreshIntervals = [
-    '5 minutes',
-    '15 minutes',
-    '30 minutes',
-    '1 hour',
-    'Manual'
-  ];
+  final List<String> _refreshIntervals =
+      MseMarketProvider.refreshOptions.keys.toList();
 
   @override
   void initState() {
@@ -60,17 +50,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Load notification preferences
-      _enableNotifications = prefs.getBool('enable_notifications') ?? true;
-      _enableMarketAlerts = prefs.getBool('enable_market_alerts') ?? true;
-      _enablePortfolioUpdates =
-          prefs.getBool('enable_portfolio_updates') ?? true;
-
-      // Load refresh interval
-      _refreshInterval = prefs.getString('refresh_interval') ?? '15 minutes';
-
-      // Load currency
-      _selectedCurrency = prefs.getString('currency') ?? 'USD';
+      final saved = prefs.getString(MseMarketProvider.refreshPrefKey);
+      _refreshInterval = MseMarketProvider.refreshOptions.containsKey(saved)
+          ? saved!
+          : MseMarketProvider.defaultRefreshOption;
 
       // Load user info
       _nameController.text = prefs.getString('userName') ?? '';
@@ -206,65 +189,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return connectivityResult != ConnectivityResult.none;
   }
 
-  // Save notification preferences
-  Future<void> _saveNotificationPreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('enable_notifications', _enableNotifications);
-      await prefs.setBool('enable_market_alerts', _enableMarketAlerts);
-      await prefs.setBool('enable_portfolio_updates', _enablePortfolioUpdates);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Notification preferences saved')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save notification preferences: $e')),
-      );
-    }
-  }
-
   // Save refresh interval
   Future<void> _saveRefreshInterval(String interval) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('refresh_interval', interval);
+      await prefs.setString(MseMarketProvider.refreshPrefKey, interval);
+      if (!mounted) return;
+      context
+          .read<MseMarketProvider>()
+          .setRefreshInterval(MseMarketProvider.parseRefreshInterval(interval));
       setState(() => _refreshInterval = interval);
-
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Data refresh interval updated')),
+        SnackBar(content: Text('Ханшийн шинэчлэлт: $interval')),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save refresh interval: $e')),
+        SnackBar(content: Text('Хадгалахад алдаа гарлаа: $e')),
       );
     }
   }
-
-  // Save currency
-  Future<void> _saveCurrency(String currency) async {
-    try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      await appState.setCurrency(currency);
-      setState(() => _selectedCurrency = currency);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Валют шинэчлэгдлээ $currency')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Валют хадгалахад алдаа гарлаа: $e')),
-      );
-    }
-  }
-
-  // Save user profile
 
   Future<void> _saveUserProfile() async {
     try {
@@ -460,105 +404,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SwitchListTile(
-                            title: Text('Biometric Authentication'),
+                            title: Text('Биометр түгжээ'),
                             subtitle: Text(appState.isBiometricEnabled
-                                ? 'Enabled for app access'
-                                : 'Disabled'),
+                                ? 'Апп нээхэд хурууны хээ/царай асууна'
+                                : 'Унтраалттай'),
                             value: appState.isBiometricEnabled,
                             onChanged: (value) async {
+                              if (value) {
+                                final ok = await BiometricLock.confirm(
+                                    'Биометр түгжээг асаахын тулд баталгаажуулна уу');
+                                if (!ok) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            'Энэ төхөөрөмж биометр дэмжихгүй эсвэл баталгаажуулалт амжилтгүй')),
+                                  );
+                                  return;
+                                }
+                              }
                               await appState.toggleBiometric();
-                              setState(() {});
+                              if (mounted) setState(() {});
                             },
                             secondary: Icon(
                               Icons.fingerprint,
                               color: appState.isBiometricEnabled
                                   ? Colors.green
-                                  : Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 24.0),
-
-                  // Notification Settings
-                  Text(
-                    'Мэдэгдэл',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  SizedBox(height: 16.0),
-
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SwitchListTile(
-                            title: Text('Enable Notifications'),
-                            subtitle: Text(_enableNotifications
-                                ? 'Та аппликейшнаас мэдэгдэл хүлээн авах болно'
-                                : 'Бүх мэдэгдэл идэвхгүй байна'),
-                            value: _enableNotifications,
-                            onChanged: (value) {
-                              setState(() {
-                                _enableNotifications = value;
-                                if (!value) {
-                                  _enableMarketAlerts = false;
-                                  _enablePortfolioUpdates = false;
-                                }
-                              });
-                              _saveNotificationPreferences();
-                            },
-                            secondary: Icon(
-                              _enableNotifications
-                                  ? Icons.notifications_active
-                                  : Icons.notifications_off,
-                              color: _enableNotifications
-                                  ? Colors.blue
-                                  : Colors.grey,
-                            ),
-                          ),
-                          Divider(),
-                          SwitchListTile(
-                            title: Text('Зах зээлийн сэрэмжлүүлэг'),
-                            subtitle: Text('Үнийн өөрчлөлт, зах зээлийн мэдээ'),
-                            value: _enableMarketAlerts && _enableNotifications,
-                            onChanged: _enableNotifications
-                                ? (value) {
-                                    setState(() => _enableMarketAlerts = value);
-                                    _saveNotificationPreferences();
-                                  }
-                                : null,
-                            secondary: Icon(
-                              Icons.trending_up,
-                              color:
-                                  (_enableMarketAlerts && _enableNotifications)
-                                      ? Colors.blue
-                                      : Colors.grey,
-                            ),
-                          ),
-                          SwitchListTile(
-                            title: Text('Багцын шинэчлэлт'),
-                            subtitle: Text(
-                                'Таны holding болон гүйцэтгэлд гарсан өөрчлөлтүүд'),
-                            value:
-                                _enablePortfolioUpdates && _enableNotifications,
-                            onChanged: _enableNotifications
-                                ? (value) {
-                                    setState(
-                                        () => _enablePortfolioUpdates = value);
-                                    _saveNotificationPreferences();
-                                  }
-                                : null,
-                            secondary: Icon(
-                              Icons.account_balance_wallet,
-                              color: (_enablePortfolioUpdates &&
-                                      _enableNotifications)
-                                  ? Colors.blue
                                   : Colors.grey,
                             ),
                           ),
@@ -583,77 +454,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.0, vertical: 8.0),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.currency_exchange,
-                                        color: Colors.grey.shade600),
-                                    SizedBox(width: 16.0),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Валют',
-                                            style: TextStyle(fontSize: 16.0),
-                                          ),
-                                          SizedBox(height: 4.0),
-                                          Text(
-                                            'Ашиглах валютаа сонгоно уу',
-                                            style: TextStyle(
-                                                fontSize: 14.0,
-                                                color: Colors.grey.shade600),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.0, vertical: 8.0),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 12.0, vertical: 4.0),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8.0),
-                                    border:
-                                        Border.all(color: Colors.grey.shade300),
-                                    color: Theme.of(context).cardColor,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: _selectedCurrency,
-                                      isExpanded: true,
-                                      icon: Icon(Icons.arrow_drop_down),
-                                      onChanged: (String? newValue) {
-                                        if (newValue != null) {
-                                          _saveCurrency(newValue);
-                                        }
-                                      },
-                                      items: _currencies
-                                          .map<DropdownMenuItem<String>>(
-                                              (String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Divider(),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -711,15 +511,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                               .setRiskTolerance(newValue);
                                         }
                                       },
-                                      items: UserPreferencesProvider
-                                          .riskToleranceOptions
-                                          .map<DropdownMenuItem<String>>(
-                                              (String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
+                                      items: [
+                                        for (final p in RiskProfile.all)
+                                          DropdownMenuItem<String>(
+                                            value: p.key,
+                                            child: Text(p.label),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -744,12 +542,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Өгөгдөл рэфреш интервал',
+                                            'Ханшийн шинэчлэлт',
                                             style: TextStyle(fontSize: 16.0),
                                           ),
                                           SizedBox(height: 4.0),
                                           Text(
-                                            'Та мэдээллийг хэдэн минут тутам шинэчлэх вэ',
+                                            'Арилжааны цагаар хувьцааны ханшийг хэр давтамжтай татах вэ',
                                             style: TextStyle(
                                                 fontSize: 14.0,
                                                 color: Colors.grey.shade600),

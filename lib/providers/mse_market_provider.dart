@@ -12,17 +12,36 @@ import '../services/mse_service.dart';
 /// * Зөвхөн сонгосон ангиллын болон багцад байгаа хувьцааны ханшийг татна.
 class MseMarketProvider extends ChangeNotifier {
   final MseService _service;
-  final Duration openInterval;
+  Duration? _openInterval;
   final Duration closedInterval;
+
+  /// Арилжааны цагийн шинэчлэлийн давтамж (null = зөвхөн гараар).
+  Duration? get openInterval => _openInterval;
+
+  /// Тохиргооны дэлгэц дээрх сонголтууд (SharedPreferences-д хадгална).
+  static const String refreshPrefKey = 'refresh_interval';
+  static const Map<String, Duration?> refreshOptions = {
+    '1 минут': Duration(minutes: 1),
+    '5 минут': Duration(minutes: 5),
+    '15 минут': Duration(minutes: 15),
+    'Гараар': null,
+  };
+  static const String defaultRefreshOption = '1 минут';
+
+  static Duration? parseRefreshInterval(String? option) =>
+      refreshOptions.containsKey(option)
+          ? refreshOptions[option]
+          : refreshOptions[defaultRefreshOption];
 
   /// Нэг дор хэдэн хүсэлт явуулах вэ (сайтад ачаалал бага өгөх).
   static const int _concurrency = 4;
 
   MseMarketProvider({
     MseService? service,
-    this.openInterval = const Duration(seconds: 60),
+    Duration? openInterval = const Duration(seconds: 60),
     this.closedInterval = const Duration(minutes: 15),
-  }) : _service = service ?? MseService();
+  })  : _service = service ?? MseService(),
+        _openInterval = openInterval;
 
   List<MseSecurity> _securities = [];
   final Map<String, MseQuote> _quotes = {};
@@ -36,6 +55,7 @@ class MseMarketProvider extends ChangeNotifier {
   DateTime? _lastUpdated;
   Timer? _timer;
   bool _started = false;
+  bool _paused = false;
   bool _disposed = false;
 
   List<MseSecurity> get securities => _securities;
@@ -74,6 +94,33 @@ class MseMarketProvider extends ChangeNotifier {
     _started = true;
     await refresh(reloadList: true);
     _scheduleNext();
+  }
+
+  /// Апп далд ороход (батарей, интернэт хэмнэх) автомат шинэчлэлийг зогсооно.
+  void pause() {
+    _paused = true;
+    _timer?.cancel();
+  }
+
+  /// Апп буцаж нээгдэхэд: ханш хуучирсан бол шууд шинэчилж, хуваарийг сэргээнэ.
+  void resume() {
+    if (!_started || !_paused) return;
+    _paused = false;
+    final last = _lastUpdated;
+    final interval =
+        isMarketOpen ? (_openInterval ?? closedInterval) : closedInterval;
+    if (last == null || DateTime.now().difference(last) >= interval) {
+      unawaited(refresh());
+    }
+    _scheduleNext();
+  }
+
+  bool get isPaused => _paused;
+
+  /// Тохиргооноос: арилжааны цагийн шинэчлэлийн давтамж (null = гараар).
+  void setRefreshInterval(Duration? interval) {
+    _openInterval = interval;
+    if (_started && !_paused) _scheduleNext();
   }
 
   /// Багцад байгаа хувьцааг ангиллаас үл хамааран үргэлж шинэчилж байх.
@@ -162,8 +209,9 @@ class MseMarketProvider extends ChangeNotifier {
 
   void _scheduleNext() {
     _timer?.cancel();
-    if (_disposed) return;
-    final interval = isMarketOpen ? openInterval : closedInterval;
+    if (_disposed || _paused) return;
+    if (isMarketOpen && _openInterval == null) return; // гараар горим
+    final interval = isMarketOpen ? _openInterval! : closedInterval;
     _timer = Timer(interval, () async {
       await refresh();
       _scheduleNext();

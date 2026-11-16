@@ -8,6 +8,8 @@ import '../providers/advisor_provider.dart';
 import '../providers/mse_market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/user_preferences_provider.dart';
+import '../widgets/signal_explanation.dart';
+import 'goal_planner_screen.dart';
 
 /// Өөрийн AI зөвлөхийн дэлгэц (Gemini-гүй, утсан дээр тооцоолно).
 class PortfolioSuggestionsScreen extends StatefulWidget {
@@ -84,6 +86,15 @@ class _PortfolioSuggestionsScreenState
                 foregroundColor: Colors.white,
               ),
               onPressed: advisor.isLoading ? null : _generate,
+            ),
+          ),
+          SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: Icon(Icons.flag_outlined),
+            label: Text('Зорилгын төлөвлөгөө (N жилд X₮)'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => GoalPlannerScreen()),
             ),
           ),
           if (advisor.error != null) ...[
@@ -302,6 +313,15 @@ class _PortfolioSuggestionsScreenState
             label: Text('Дахин эхлүүлэх'),
             onPressed: advisor.reset,
           ),
+          SizedBox(height: 12),
+          OutlinedButton.icon(
+            icon: Icon(Icons.flag_outlined),
+            label: Text('Зорилгын төлөвлөгөө (N жилд X₮)'),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => GoalPlannerScreen()),
+            ),
+          ),
         ],
       ),
     );
@@ -420,7 +440,9 @@ class _PortfolioSuggestionsScreenState
                 style: Theme.of(context).textTheme.titleLarge),
             SizedBox(height: 8),
             for (final t in report.targets)
-              Padding(
+              InkWell(
+                onTap: () => _showExplanation(t.symbol, t.name),
+                child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 4),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -439,11 +461,13 @@ class _PortfolioSuggestionsScreenState
                     LinearProgressIndicator(value: t.weight, minHeight: 6),
                     Text(
                       'Өсөх магадлал ${(t.signal.probUp * 100).toStringAsFixed(0)}% · '
-                      'хэлбэлзэл ${(t.signal.annualVol * 100).toStringAsFixed(0)}%',
+                      'хэлбэлзэл ${(t.signal.annualVol * 100).toStringAsFixed(0)}% · '
+                      'яагаад? →',
                       style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                     ),
                   ],
                 ),
+              ),
               ),
             Divider(),
             Row(
@@ -454,6 +478,35 @@ class _PortfolioSuggestionsScreenState
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Загвар энэ хувьцааг яагаад сонгосныг харуулна.
+  void _showExplanation(String symbol, String name) {
+    final signals = context.read<AdvisorProvider>().signals;
+    final signal = signals?.signalFor(symbol);
+    if (signals == null || signal == null) return;
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('$symbol · $name',
+                  style: Theme.of(ctx).textTheme.titleLarge),
+              SizedBox(height: 12),
+              SignalExplanation(
+                signal: signal,
+                baseRate: AdvisorEngine(signals).baseRate,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -562,6 +615,53 @@ class _PortfolioSuggestionsScreenState
     if (success) await _generate();
   }
 
+  /// Дохио хэр шинэ вэ (өдөр бүр серверээс шинэчлэгддэг).
+  Widget _buildFreshness() {
+    final advisor = context.watch<AdvisorProvider>();
+    final date = advisor.dataDate;
+    const sources = {
+      SignalsSource.remote: 'серверээс шинэчилсэн',
+      SignalsSource.cache: 'утсанд хадгалсан',
+      SignalsSource.bundled: 'апп доторх',
+    };
+    final days = date == null ? null : DateTime.now().difference(date).inDays;
+    final stale = advisor.isStale;
+    final color = stale ? Colors.orange.shade800 : Colors.green.shade700;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Icon(stale ? Icons.warning_amber : Icons.check_circle,
+              size: 16, color: color),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              date == null
+                  ? 'Дохио алга'
+                  : 'Дохио: ${DateFormat('yyyy-MM-dd').format(date)}-ны арилжаагаар '
+                      '(${sources[advisor.source] ?? ''})'
+                      '${stale ? ' — $days хоногийн өмнөх, шинэчлэх шаардлагатай' : ''}',
+              style: TextStyle(fontSize: 12, color: color),
+            ),
+          ),
+          if (advisor.isRefreshing)
+            SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2))
+          else if (stale)
+            IconButton(
+              tooltip: 'Шинэ дохио татах',
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Icons.refresh, size: 18),
+              onPressed: () => advisor.refreshRemote(force: true),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModelInfo(Map<String, dynamic> m, DateTime generatedAt) {
     final bt = m['backtest'] as Map? ?? {};
     String pct(dynamic v) =>
@@ -582,10 +682,11 @@ class _PortfolioSuggestionsScreenState
               ],
             ),
             SizedBox(height: 8),
+            _buildFreshness(),
             Text(
               'Өөрсдийн сургасан логистик регресс · ${m['stocks'] ?? '—'} хувьцаа, '
-              '${m['samples'] ?? '—'} жишээ · дохио: '
-              '${DateFormat('yyyy-MM-dd').format(generatedAt)}',
+              '${m['samples'] ?? '—'} жишээ · тооцоолсон: '
+              '${DateFormat('yyyy-MM-dd HH:mm').format(generatedAt)}',
               style: TextStyle(fontSize: 12),
             ),
             Text(

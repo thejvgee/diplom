@@ -212,8 +212,9 @@ class MseService {
         ),
       );
     }
-    bars.sort((a, b) => a.date.compareTo(b.date));
-    return bars;
+    // Сайтын өгөгдөлд ижил өдөр давхардсан мөр байдаг — нэг өдөрт нэг мөр үлдээнэ.
+    final byDate = <DateTime, MseDailyBar>{for (final b in bars) b.date: b};
+    return byDate.values.toList()..sort((a, b) => a.date.compareTo(b.date));
   }
 
   // ---------------------------------------------------------------------------

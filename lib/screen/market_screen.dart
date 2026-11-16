@@ -7,7 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/holding.dart';
 import '../models/mse_quote.dart';
 import '../providers/crypto_market_provider.dart';
+import '../ai_engine/advisor_engine.dart';
+import '../providers/advisor_provider.dart';
 import '../providers/mse_market_provider.dart';
+import '../widgets/signal_explanation.dart';
 import '../providers/portfolio_provider.dart';
 import '../services/crypto_service.dart';
 
@@ -270,6 +273,7 @@ class _MarketScreenState extends State<MarketScreen>
                       '${_money.format(q.week52Low)} – ${_money.format(q.week52High)}₮'),
                   _detailRow('Зах зээлийн үнэлгээ', '${_compact.format(q.marketCap)}₮'),
                 ],
+                _buildAiSection(ctx, security.symbol),
                 SizedBox(height: 20),
                 Text('Сүүлийн 3 сарын хаалтын ханш',
                     style: Theme.of(ctx).textTheme.titleMedium),
@@ -294,6 +298,37 @@ class _MarketScreenState extends State<MarketScreen>
             );
           },
         ),
+      ),
+    );
+  }
+
+  /// Хувьцааны дэлгэрэнгүй дээрх AI-ийн дүгнэлт ба тайлбарын график.
+  Widget _buildAiSection(BuildContext ctx, String symbol) {
+    final advisor = ctx.watch<AdvisorProvider>();
+    final signals = advisor.signals;
+    final signal = signals?.signalFor(symbol);
+    if (signals == null || signal == null) {
+      return Padding(
+        padding: EdgeInsets.only(top: 16),
+        child: Text(
+          'AI дохио: энэ хувьцаанд загварын таамаг алга (III ангилал эсвэл '
+          'арилжааны түүх хангалтгүй).',
+          style: TextStyle(fontSize: 12, color: Theme.of(ctx).hintColor),
+        ),
+      );
+    }
+    return Padding(
+      padding: EdgeInsets.only(top: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('AI шинжилгээ', style: Theme.of(ctx).textTheme.titleMedium),
+          SizedBox(height: 8),
+          SignalExplanation(
+            signal: signal,
+            baseRate: AdvisorEngine(signals).baseRate,
+          ),
+        ],
       ),
     );
   }

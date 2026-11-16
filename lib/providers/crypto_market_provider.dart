@@ -58,6 +58,15 @@ class CryptoMarketProvider extends ChangeNotifier {
     _timer = Timer.periodic(interval, (_) => refresh());
   }
 
+  /// Апп далд ороход шинэчлэлийг зогсооно.
+  void pause() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// Апп буцаж нээгдэхэд шинэчлэлийг сэргээнэ.
+  void resume() => start();
+
   Future<void> refresh() async {
     if (_isLoading) return;
     _isLoading = true;

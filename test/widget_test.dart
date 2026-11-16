@@ -23,7 +23,8 @@ void main() {
     await tester.pumpWidget(
       MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => AdvisorProvider()),
+          // remoteUrl хоосон → тестэд сүлжээнд хандахгүй
+          ChangeNotifierProvider(create: (_) => AdvisorProvider(remoteUrl: '')),
           ChangeNotifierProvider.value(value: portfolio),
           ChangeNotifierProvider(create: (_) => UserPreferencesProvider()),
           // start() дуудахгүй тул сүлжээнд хандахгүй

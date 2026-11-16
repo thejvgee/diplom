@@ -51,7 +51,7 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
     });
     try {
       final response = await _geminiService.startChat();
-      final bool possibleApiKeyIssue = response.contains("problem with the API") || response.contains("backup service");
+      final bool possibleApiKeyIssue = GeminiService.isOfflineReply(response);
       setState(() {
         _messages.add({
           'sender': 'Хиймэл оюун зөвлөх',
@@ -97,23 +97,14 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
 
     try {
       final response = await _geminiService.sendMessage(message);
-      final bool isErrorResponse = response.contains('No internet connection') ||
-          response.contains('Unable to connect') ||
-          response.contains('Invalid API key') ||
-          response.contains('I apologize') ||
-          response.contains('trouble accessing') ||
-          response.contains('error processing');
-      final bool isUsingDemo = response.contains('Please note this is general advice') ||
-          response.contains('This is simplified advice') ||
-          response.contains('This general advice may need adjustment') ||
-          response.contains('This is general guidance');
+      // Gemini холбогдоогүй үед апп-ын AI загварын тоймыг харуулдаг
+      final bool isUsingDemo = GeminiService.isOfflineReply(response);
 
       setState(() {
         _messages.add({
           'sender': 'Хиймэл оюун зөвлөх',
           'text': response,
           'timestamp': DateTime.now().toString(),
-          'isError': isErrorResponse ? true : null,
           'isDemo': isUsingDemo,
         });
         _isUsingDemoMode = _isUsingDemoMode || isUsingDemo;
