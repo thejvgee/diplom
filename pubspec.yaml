@@ -95,7 +95,8 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - .env
+    # .env-ийг APK-д оруулахгүй: Gemini түлхүүрийг хэрэглэгч Тохиргоонд
+    # оруулж утасны нууц санд хадгална (ApiKeyService).
     - assets/ai/
 
   # An image asset can refer to one or more resolution-specific "variants", see

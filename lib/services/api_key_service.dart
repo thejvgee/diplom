@@ -1,39 +1,32 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
 class ApiKeyService {
-  static final _storage = FlutterSecureStorage();
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
+
+  static const String _keyName = 'gemini_api_key';
 
   static Future<String> getGeminiApiKey() async {
     try {
-      String? apiKey = await _storage.read(key: 'gemini_api_key');
-      return apiKey ?? dotenv.env['GEMINI_API_KEY'] ?? '';
+      final apiKey = await _storage.read(key: _keyName);
+
+      if (apiKey == null || apiKey.isEmpty) {
+        return '';
+      }
+
+      return apiKey;
     } catch (e) {
-      print('Error retrieving Gemini API key: $e');
-      return dotenv.env['GEMINI_API_KEY'] ?? '';
+      _log('Error retrieving API key: $e');
+      return '';
     }
   }
 
-  static Future<String> getBackupGeminiApiKey() async {
+  static Future<bool> saveGeminiApiKey(String apiKey) async {
     try {
-      String? apiKey = await _storage.read(key: 'gemini_backup_api_key');
-      return apiKey ?? dotenv.env['GEMINI_BACKUP_KEY'] ?? '';
-    } catch (e) {
-      print('Error retrieving backup Gemini API key: $e');
-      return dotenv.env['GEMINI_BACKUP_KEY'] ?? '';
-    }
-  }
-
-  static Future<bool> saveGeminiApiKey(String apiKey, {bool isBackup = false}) async {
-    try {
-      await _storage.write(
-        key: isBackup ? 'gemini_backup_api_key' : 'gemini_api_key',
-        value: apiKey,
-      );
+      await _storage.write(key: _keyName, value: apiKey);
       return true;
     } catch (e) {
-      print('Error saving Gemini API key: $e');
+      _log('Error saving API key: $e');
       return false;
     }
   }
@@ -42,15 +35,27 @@ class ApiKeyService {
     if (apiKey.isEmpty) return false;
 
     try {
-      final url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey');
-      final response = await http.get(url).timeout(Duration(seconds: 10));
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+            const Duration(seconds: 10),
+          );
+
       if (response.statusCode == 200) return true;
-      print('API key validation failed. Status code: ${response.statusCode}');
-      print('Response body: ${response.body}');
+
+      _log('Validation failed: ${response.statusCode} - ${response.body}');
       return false;
     } catch (e) {
-      print('Error validating Gemini API key: $e');
+      _log('Validation error: $e');
       return false;
     }
+  }
+
+  static void _log(String msg) {
+    // CI friendly logging
+    // ignore: avoid_print
+    print(msg);
   }
 }

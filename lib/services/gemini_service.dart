@@ -38,22 +38,22 @@ class GeminiService {
   String? Function(String message)? localAnswer;
   String Function(String message)? offlineAnswer;
 
-  late String _fixedApiKey;
-  late String _backupApiKey;
-  late GenerativeModel _model;
+  GenerativeModel? _model;
   final Connectivity _connectivity = Connectivity();
-  bool _usingBackupKey = false;
-  bool _initialized = false;
+
+  /// Gemini-ийн түлхүүр тохируулсан эсэх. Түлхүүрийг кодонд/APK-д биш, зөвхөн
+  /// хэрэглэгчийн утасны нууц санд (ApiKeyService) хадгална.
+  bool get hasApiKey => _model != null;
 
   static final GeminiService _instance = GeminiService._internal();
   factory GeminiService() => _instance;
   GeminiService._internal();
 
+  /// Нууц сангаас түлхүүрийг уншиж загварыг бэлдэнэ. Тохиргоонд түлхүүр
+  /// хадгалсны дараа дахин дуудна.
   Future<void> init() async {
-    _fixedApiKey = await ApiKeyService.getGeminiApiKey();
-    _backupApiKey = await ApiKeyService.getBackupGeminiApiKey();
-    _model = _createModel(_fixedApiKey);
-    _initialized = true;
+    final apiKey = await ApiKeyService.getGeminiApiKey();
+    _model = apiKey.isEmpty ? null : _createModel(apiKey);
   }
 
   GenerativeModel _createModel(String apiKey) => GenerativeModel(
@@ -71,13 +71,6 @@ class GeminiService {
     return result != ConnectivityResult.none;
   }
 
-  Future<bool> _switchToBackupKey() async {
-    if (_usingBackupKey || _backupApiKey.isEmpty) return false;
-    _model = _createModel(_backupApiKey);
-    _usingBackupKey = true;
-    debugPrint('Switched to backup Gemini API key');
-    return true;
-  }
 
   /// Мэндчилгээ. Өмнө нь энд Gemini-г дуудаад хариуг нь ашигладаггүй байсан —
   /// чат нээх бүрт дэмий API зардал гаргадаг байв.
@@ -93,14 +86,19 @@ class GeminiService {
       return local;
     }
 
-    if (!_initialized || !await _checkConnectivity()) {
+    final model = _model;
+    if (model == null) {
+      return _offline(
+          message, 'AI чатын түлхүүр тохируулаагүй — Тохиргоо → AI чатын түлхүүр');
+    }
+    if (!await _checkConnectivity()) {
       return _offline(message, 'интернэт холболт алга');
     }
 
     // 2. Gemini — бодит өгөгдлийн контексттэй
     try {
       final context = contextBuilder?.call();
-      final response = await _model.generateContent([
+      final response = await model.generateContent([
         Content.text(_basePrompt),
         if (context != null && context.isNotEmpty) Content.text(context),
         Content.text(message),
@@ -113,10 +111,11 @@ class GeminiService {
       return text;
     } catch (e) {
       debugPrint('Gemini error: $e');
-      if (e.toString().contains('API key') && await _switchToBackupKey()) {
-        return sendMessage(message);
-      }
-      return _offline(message, 'AI үйлчилгээнд алдаа гарлаа');
+      return _offline(
+          message,
+          e.toString().contains('API key')
+              ? 'AI чатын түлхүүр буруу байна'
+              : 'AI үйлчилгээнд алдаа гарлаа');
     }
   }
 

@@ -1,6 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:jvgee_diplom/screen/forgot_password_screen.dart';
 import 'package:jvgee_diplom/services/gemini_service.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +21,6 @@ late final AppLifecycleListener appLifecycleListener;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp();
   // Gemini-ийн түлхүүрийг эхлэхэд сүлжээгээр шалгахаа больсон: үр дүнг нь
   // ашигладаггүй байсан бөгөөд интернэтгүй үед апп 10 сек хүлээгддэг байв.

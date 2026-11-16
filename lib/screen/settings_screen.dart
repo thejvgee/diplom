@@ -11,6 +11,8 @@ import '../providers/app_state.dart';
 import '../providers/mse_market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/user_preferences_provider.dart';
+import '../services/api_key_service.dart';
+import '../services/gemini_service.dart';
 import 'auth_gate.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -85,6 +87,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SnackBar(content: Text('Гарахад алдаа гарлаа: $e')),
       );
     }
+  }
+
+  /// Gemini-ийн түлхүүрийг утасны нууц санд хадгална (APK/репод биш).
+  Future<void> _editGeminiKey() async {
+    final controller = TextEditingController();
+    final key = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('AI чатын түлхүүр (Gemini)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Google AI Studio-оос авсан API түлхүүрээ оруулна уу. Түлхүүр '
+              'зөвхөн энэ утасны нууц санд хадгалагдана. Хоосон үлдээвэл '
+              'устгана.',
+              style: TextStyle(fontSize: 13),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'API түлхүүр',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text('Цуцлах')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text('Хадгалах')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (key == null) return;
+
+    if (key.isNotEmpty && !await ApiKeyService.validateGeminiApiKey(key)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Түлхүүр хүчингүй эсвэл интернэт холболт алга')),
+      );
+      return;
+    }
+    await ApiKeyService.saveGeminiApiKey(key);
+    await GeminiService().init();
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(key.isEmpty ? 'Түлхүүр устгагдлаа' : 'Түлхүүр хадгалагдлаа'),
+    ));
   }
 
   Future<bool> _confirm(String title, String message, String action) async {
@@ -597,6 +655,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+
+                  SizedBox(height: 24.0),
+
+                  // AI чат
+                  Text(
+                    'AI чат',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  SizedBox(height: 16.0),
+                  Card(
+                    elevation: 2,
+                    child: ListTile(
+                      leading: Icon(Icons.key),
+                      title: Text('AI чатын түлхүүр (Gemini)'),
+                      subtitle: Text(GeminiService().hasApiKey
+                          ? 'Тохируулсан — утасны нууц санд'
+                          : 'Тохируулаагүй — чат нь апп-ын AI загвараар л хариулна'),
+                      onTap: _editGeminiKey,
                     ),
                   ),
 
