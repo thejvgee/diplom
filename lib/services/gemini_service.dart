@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
+import '../ai_engine/chat_tools.dart';
 import 'api_key_service.dart';
 
 /// AI чат (Gemini). Хариултыг апп-ын бодит өгөгдөлд тулгуурлуулна:
@@ -11,6 +12,8 @@ import 'api_key_service.dart';
 ///   апп-ын AI загвар хариулна (хувьцаа зохиохоос сэргийлнэ).
 /// * [contextBuilder] — хэрэглэгчийн багц, AI дохиог Gemini-д контекст болгон өгнө.
 /// * [offlineAnswer] — Gemini холбогдохгүй үед багцын бодит тойм.
+/// * [toolHandler] — function calling: Gemini апп-ын AI engine-ийн функцийг
+///   (багцын шинжилгээ, хувьцааны дохио, зорилгын тооцоо...) дуудаж бодит тоо авна.
 class GeminiService {
   static const String _basePrompt = '''
 Та бол Монголын хөрөнгийн бирж (MSE) дээр төвлөрсөн, хөрөнгө оруулалтын
@@ -26,7 +29,13 @@ class GeminiService {
    тайлбарлаж болно.
 4. Эрсдэлийг үргэлж дурд; баталгаатай өгөөж амлахгүй.
 5. Төгсгөлд нь энэ нь мэргэжлийн санхүүгийн зөвлөгөө биш гэдгийг товч сануул.
+6. Хувьцааны дохио, багцын шинжилгээ, хөрөнгө хуваарилалт, зорилгын (N жилд X
+   төгрөг) тооцоо, загварын гүйцэтгэл хэрэгтэй бол өгөгдсөн функцуудыг ДУУДАЖ,
+   үр дүнгийн тоог ашигла. Өөрөө тооцоолж эсвэл таамаглаж болохгүй.
 ''';
+
+  /// Нэг асуултад функц дуудах дээд тоо (хязгааргүй давталтаас сэргийлнэ).
+  static const int maxToolRounds = 4;
 
   /// Gemini холбогдохгүй үеийн хариултын эхлэл (чатын дэлгэц үүгээр таньдаг).
   static const String offlinePrefix = '⚠️ AI чат одоогоор холбогдохгүй байна';
@@ -37,6 +46,8 @@ class GeminiService {
   String Function()? contextBuilder;
   String? Function(String message)? localAnswer;
   String Function(String message)? offlineAnswer;
+  Map<String, Object?> Function(String name, Map<String, Object?> args)?
+      toolHandler;
 
   GenerativeModel? _model;
   final Connectivity _connectivity = Connectivity();
@@ -59,12 +70,38 @@ class GeminiService {
   GenerativeModel _createModel(String apiKey) => GenerativeModel(
         model: 'gemini-2.0-flash',
         apiKey: apiKey,
+        tools: [Tool(functionDeclarations: _declarations())],
         generationConfig: GenerationConfig(
           temperature: 0.4,
           topP: 0.7,
           topK: 40,
         ),
       );
+
+  /// ChatTools-ийн тодорхойлолтыг Gemini-ийн FunctionDeclaration болгоно.
+  static List<FunctionDeclaration> _declarations() => [
+        for (final spec in ChatTools.specs)
+          FunctionDeclaration(
+            spec.name,
+            spec.description,
+            spec.params.isEmpty
+                ? null
+                : Schema.object(
+                    properties: {
+                      for (final e in spec.params.entries)
+                        e.key: switch (e.value.type) {
+                          'number' => Schema.number(description: e.value.description),
+                          'integer' => Schema.integer(description: e.value.description),
+                          _ => Schema.string(description: e.value.description),
+                        },
+                    },
+                    requiredProperties: [
+                      for (final e in spec.params.entries)
+                        if (e.value.required) e.key
+                    ],
+                  ),
+          ),
+      ];
 
   Future<bool> _checkConnectivity() async {
     final result = await _connectivity.checkConnectivity();
@@ -95,14 +132,29 @@ class GeminiService {
       return _offline(message, 'интернэт холболт алга');
     }
 
-    // 2. Gemini — бодит өгөгдлийн контексттэй
+    // 2. Gemini — бодит өгөгдлийн контекст + function calling
     try {
       final context = contextBuilder?.call();
-      final response = await model.generateContent([
+      final contents = <Content>[
         Content.text(_basePrompt),
         if (context != null && context.isNotEmpty) Content.text(context),
         Content.text(message),
-      ]);
+      ];
+      GenerateContentResponse response = await model.generateContent(contents);
+      for (var round = 0; round < maxToolRounds; round++) {
+        final calls = response.functionCalls.toList();
+        if (calls.isEmpty) break;
+        contents.add(Content.model(calls));
+        contents.add(Content.functionResponses([
+          for (final c in calls)
+            FunctionResponse(
+              c.name,
+              toolHandler?.call(c.name, c.args) ??
+                  {'error': 'Функц одоогоор ашиглах боломжгүй'},
+            ),
+        ]));
+        response = await model.generateContent(contents);
+      }
       final text = response.text;
       if (text == null || text.trim().isEmpty) {
         return _offline(message, 'хариулт ирсэнгүй');

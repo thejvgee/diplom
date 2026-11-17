@@ -64,6 +64,26 @@ Future<void> main(List<String> args) async {
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }
   stdout.writeln('Дүн: $counts, алдаа: $failures');
+
+  // Санхүүгийн тайлан: долоо хоногт нэг удаа (эсвэл --refresh) шинэчилнэ.
+  final fundDir = Directory('tool/data/fundamentals')..createSync(recursive: true);
+  var fundUpdated = 0, fundFailed = 0;
+  for (final sec in securities) {
+    final f = File('${fundDir.path}/${sec.symbol}.json');
+    final fresh = f.existsSync() &&
+        DateTime.now().difference(f.lastModifiedSync()) < const Duration(days: 7);
+    if (fresh && !refresh) continue;
+    try {
+      final reports = await svc.fetchFundamentals(sec);
+      f.writeAsStringSync(jsonEncode([for (final r in reports) r.toJson()]));
+      fundUpdated++;
+    } catch (e) {
+      fundFailed++;
+      stderr.writeln('${sec.symbol}: санхүүгийн тайлан АЛДАА $e');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  }
+  stdout.writeln('Санхүүгийн тайлан: $fundUpdated шинэчилсэн, $fundFailed алдаа');
   // Ихэнх нь амжилтгүй бол (сайт унасан г.м.) хуучин дохиог дарж бичихгүй.
   if (failures > securities.length ~/ 4) exit(1);
 }

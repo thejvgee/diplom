@@ -83,7 +83,7 @@ class ChatContext {
       b.writeln('$i. **${t.symbol}** (${t.name}) — ${_pct(t.weight)} ≈ '
           '${_money(spend)}₮'
           '${shares > 0 ? ' → ${_money(shares)} ширхэг × ${_money(price)}₮' : ''}');
-      b.writeln('   Өсөх магадлал ${_pct(t.signal.probUp)} '
+      b.writeln('   ${_cap(engine.probLabel)} ${_pct(t.signal.probUp)} '
           '(дунджаас ${_signed((engine.edgeOf(t.signal)) * 100)} пункт), '
           'жилийн хэлбэлзэл ${_pct(t.signal.annualVol)}');
     }
@@ -133,7 +133,7 @@ class ChatContext {
         final sig = signals?.signalFor(h.symbol);
         b.writeln('- ${h.symbol}: ${_money(h.quantity)} ширхэг, дундаж өртөг '
             '${_money(h.averageCost)}₮, одоо ${_money(p)}₮ (${_signed(pl * 100)}%)'
-            '${sig == null ? '' : ', AI өсөх магадлал ${_pct(sig.probUp)}'}');
+            '${sig == null ? '' : ', AI ${engine?.probLabel ?? 'магадлал'} ${_pct(sig.probUp)}'}');
       }
     }
     if (report != null) {
@@ -150,7 +150,7 @@ class ChatContext {
       b
         ..writeln('AI загварын (логистик регресс, MSE ${_date(signals.generatedAt)}) '
             'хамгийн сайн дохиотой, идэвхтэй арилжаалагддаг хувьцаа '
-            '(30 хоногт өсөх магадлал; зах зээлийн дундаж ${_pct(engine.baseRate)}):');
+            '(30 хоногт ${engine.probLabel}; арилжаалагддаг хувьцааны медиан ${_pct(engine.baseRate)}):');
       for (final s in top.take(8)) {
         b.writeln('- ${s.symbol} (${s.name}): ${_pct(s.probUp)}, жилийн '
             'хэлбэлзэл ${_pct(s.annualVol)}, 60 өдрийн өгөөж ${_signed(s.ret60 * 100)}%');
@@ -210,4 +210,6 @@ class ChatContext {
   static String _signed(double v) =>
       '${v >= 0 ? '+' : ''}${v.toStringAsFixed(1)}';
   static String _date(DateTime d) => d.toIso8601String().substring(0, 10);
+  static String _cap(String s) =>
+      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../ai_engine/fundamentals.dart';
 import '../models/mse_quote.dart';
 
 /// Монголын хөрөнгийн биржийн (MSE) нээлттэй мэдээллийн сайт
@@ -223,6 +224,78 @@ class MseService {
 
   /// MSE-ийн арилжааны цаг: Даваа–Баасан, Улаанбаатарын цагаар (UTC+8)
   /// ойролцоогоор 10:00–13:00. Бага зэрэг өргөн хүрээ авав.
+  // ---------------------------------------------------------------------------
+  // Санхүүгийн тайлан
+  // ---------------------------------------------------------------------------
+
+  /// Компанийн бүх үеийн санхүүгийн үзүүлэлт + тайлан нийтлэгдсэн огноо.
+  Future<List<FinancialReport>> fetchFundamentals(MseSecurity security) async {
+    final client = _clientFactory();
+    try {
+      final periods = await client
+          .get(Uri.parse('$baseUrl/securities/${security.id}/financials/filter'),
+              headers: {..._headers, 'Accept': 'application/json'})
+          // Зарим компанийн бүх үеийн тайлан ~25 сек ачаалдаг
+          .timeout(const Duration(seconds: 60));
+      final tab = await client
+          .get(Uri.parse('$baseUrl/securities/${security.id}/tab/financials'),
+              headers: _headers)
+          .timeout(_timeout);
+      if (periods.statusCode != 200 || tab.statusCode != 200) {
+        throw MseException('${security.symbol}: санхүүгийн тайлан татагдсангүй');
+      }
+      final json = jsonDecode(utf8.decode(periods.bodyBytes)) as Map<String, dynamic>;
+      return parseFundamentals(
+        json['html'] as String? ?? '',
+        utf8.decode(tab.bodyBytes, allowMalformed: true),
+      );
+    } finally {
+      client.close();
+    }
+  }
+
+  static final RegExp _periodHeader = RegExp(r'(\d{4})\s*Он\s*(\d)\s*Улирал');
+  static final RegExp _publishRow =
+      RegExp(r'<td>\s*\d+\s*</td>\s*<td>\s*(\d{4})\s*</td>\s*<td>\s*(\d)\s*</td>\s*<td[^>]*>\s*(\d{4}-\d{2}-\d{2})');
+
+  static List<FinancialReport> parseFundamentals(String periodsHtml, String tabHtml) {
+    final published = <String, DateTime>{};
+    for (final m in _publishRow.allMatches(tabHtml)) {
+      final d = DateTime.tryParse(m.group(3)!);
+      if (d != null) published['${m.group(1)}-${m.group(2)}'] = d;
+    }
+
+    String text(String html) => _decodeEntities(
+        html.replaceAll(RegExp(r'<[^>]+>'), ' ').replaceAll(RegExp(r'\s+'), ' '));
+    double? field(String t, String label) {
+      final m = RegExp('${RegExp.escape(label)}\\s*:\\s*(-?[0-9][0-9,]*(?:\\.[0-9]+)?)')
+          .firstMatch(t);
+      return m == null ? null : double.tryParse(m.group(1)!.replaceAll(',', ''));
+    }
+
+    final reports = <FinancialReport>[];
+    for (final block in periodsHtml.split('finance-report-item').skip(1)) {
+      final t = text(block);
+      final h = _periodHeader.firstMatch(t);
+      if (h == null) continue;
+      final year = int.parse(h.group(1)!), season = int.parse(h.group(2)!);
+      final eps = field(t, 'Нэгж хувьцааны өгөөж /EPS/') ?? 0;
+      final bvps = field(t, 'Нэгж хувьцааны дансны үнэ') ?? 0;
+      final roe = field(t, 'Хувь нийлүүлсэн хөрөнгийн өгөөж /ROE/');
+      if (eps == 0 && bvps == 0 && roe == null) continue;
+      reports.add(FinancialReport(
+        year: year,
+        season: season,
+        published: published['$year-$season'] ??
+            FinancialReport.assumedPublication(year, season),
+        eps: eps,
+        bvps: bvps,
+        roe: roe,
+      ));
+    }
+    return reports;
+  }
+
   static bool isMarketOpen([DateTime? now]) {
     final ub = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 8));
     if (ub.weekday == DateTime.saturday || ub.weekday == DateTime.sunday) {

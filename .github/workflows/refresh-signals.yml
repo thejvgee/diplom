@@ -50,6 +50,13 @@ jobs:
           key: mse-dataset-${{ github.run_id }}
           restore-keys: mse-dataset-
 
+      - name: Restore signal log (track record)
+        run: |
+          mkdir -p tool/data
+          if [ ! -f tool/data/signal_log.json ]; then
+            curl -fsS https://diplom-23056.web.app/ai/signal_log.json -o tool/data/signal_log.json               || echo "Нийтлэгдсэн бүртгэл алга — шинээр эхэлнэ"
+          fi
+
       - name: Update MSE dataset
         run: |
           if [ "${{ github.event.schedule }}" = "0 2 * * 0" ] || [ "${{ inputs.full_refresh }}" = "true" ]; then
@@ -68,13 +75,14 @@ jobs:
         run: dart run tool/train_advisor.dart
 
       - name: Run tests
-        run: flutter test test/ai_engine_test.dart test/history_update_test.dart
+        run: flutter test test/ai_engine_test.dart test/ai_engine_v2_test.dart test/history_update_test.dart test/goal_planner_test.dart
 
       - name: Prepare hosting files
         run: |
           mkdir -p build/hosting/ai
           cp assets/ai/signals.json assets/ai/advisor_model.json build/hosting/ai/
           cp docs/ai_model_report.md build/hosting/ai/report.md
+          cp tool/data/signal_log.json build/hosting/ai/signal_log.json
           printf '<!doctype html><meta charset="utf-8"><title>AI signals</title><a href="ai/signals.json">signals.json</a> · <a href="ai/report.md">report</a>\n' > build/hosting/index.html
 
       - name: Keep a copy as artifact

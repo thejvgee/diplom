@@ -1,5 +1,6 @@
 import '../ai_engine/advisor_engine.dart';
 import '../ai_engine/chat_context.dart';
+import '../ai_engine/chat_tools.dart';
 import '../ai_engine/risk_profile.dart';
 import 'advisor_provider.dart';
 import 'mse_market_provider.dart';
@@ -65,6 +66,20 @@ class ChatGrounding {
       livePrices: mse.lastPrices,
     );
   }
+
+  /// Gemini-ийн function calling: апп-ын AI engine-ийн функцийг гүйцэтгэнэ.
+  Map<String, Object?> tool(String name, Map<String, Object?> args) =>
+      ChatTools.execute(
+        name,
+        args,
+        ChatToolContext(
+          signals: advisor.signals,
+          holdings: _holdings,
+          cash: portfolio.cashBalance,
+          profile: _profile,
+          livePrices: mse.lastPrices,
+        ),
+      );
 
   /// Gemini холбогдохгүй үеийн хариулт.
   String offlineAnswer(String message) =>

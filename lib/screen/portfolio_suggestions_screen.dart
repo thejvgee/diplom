@@ -151,7 +151,7 @@ class _PortfolioSuggestionsScreenState
             ),
             SizedBox(height: 8),
             _buildFeatureItem('Таны одоогийн багц ба бэлэн мөнгө'),
-            _buildFeatureItem('Хувьцаа бүрийн өсөх магадлал (өөрийн загвар)'),
+            _buildFeatureItem('Хувьцаа бүрийн зах зээлээс илүү өсөх магадлал (өөрийн загвар)'),
             _buildFeatureItem('Хэлбэлзэл, корреляци, хөрвөх чадвар'),
             _buildFeatureItem('Таны эрсдэлийн профайл'),
             SizedBox(height: 12),
@@ -460,7 +460,7 @@ class _PortfolioSuggestionsScreenState
                     SizedBox(height: 4),
                     LinearProgressIndicator(value: t.weight, minHeight: 6),
                     Text(
-                      'Өсөх магадлал ${(t.signal.probUp * 100).toStringAsFixed(0)}% · '
+                      'Илүү өсөх магадлал ${(t.signal.probUp * 100).toStringAsFixed(0)}% · '
                       'хэлбэлзэл ${(t.signal.annualVol * 100).toStringAsFixed(0)}% · '
                       'яагаад? →',
                       style: TextStyle(fontSize: 12, color: Colors.grey[700]),
@@ -684,28 +684,56 @@ class _PortfolioSuggestionsScreenState
             SizedBox(height: 8),
             _buildFreshness(),
             Text(
-              'Өөрсдийн сургасан логистик регресс · ${m['stocks'] ?? '—'} хувьцаа, '
-              '${m['samples'] ?? '—'} жишээ · тооцоолсон: '
+              '${m['modelType'] == 'gbm' ? 'Gradient boosting' : 'Логистик регресс'} '
+              '(өөрсдийн сургасан) · ${m['stocks'] ?? '—'} хувьцаа, '
+              '${m['samples'] ?? '—'} жишээ, ${m['features'] ?? '—'} шинж · тооцоолсон: '
               '${DateFormat('yyyy-MM-dd HH:mm').format(generatedAt)}',
               style: TextStyle(fontSize: 12),
             ),
             Text(
-              'Тест AUC ${m['testAuc'] ?? '—'} · нарийвчлал ${pct(m['testAccuracy'])} '
-              '(суурь ${pct(m['baselineAccuracy'])})',
+              m['target'] == 'excess'
+                  ? 'Зорилт: 30 хоногт зах зээлийн дунджаас илүү өсөх эсэх'
+                  : 'Зорилт: 30 хоногт өсөх эсэх',
+              style: TextStyle(fontSize: 12),
+            ),
+            Text(
+              'Walk-forward (загвар хараагүй) AUC ${m['testAuc'] ?? '—'}'
+              '${m['rankIc'] == null ? '' : ' · Rank IC ${m['rankIc']}'}',
               style: TextStyle(fontSize: 12),
             ),
             if (bt.isNotEmpty)
               Text(
-                'Backtest ${bt['months']} сар: стратеги ${pct(bt['strategyTotalReturn'])}, '
-                'жишиг ${pct(bt['benchmarkTotalReturn'])} (шимтгэлгүй)',
+                'Backtest ${bt['months']} сар (шимтгэлтэй): жилд '
+                '${pct(bt['strategyCagr'] ?? bt['strategyTotalReturn'])} vs жишиг '
+                '${pct(bt['benchmarkCagr'] ?? bt['benchmarkTotalReturn'])}'
+                '${bt['strategyMaxDrawdown'] == null ? '' : ', хамгийн их уналт ${pct(bt['strategyMaxDrawdown'])}'}'
+                '${bt['excessTStat'] == null ? '' : ', t=${bt['excessTStat']}'}',
                 style: TextStyle(fontSize: 12),
               ),
+            _buildTrackRecord(m['trackRecord']),
             SizedBox(height: 8),
             Text(AdvisorEngine.disclaimer,
                 style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
           ],
         ),
       ),
+    );
+  }
+
+  /// Бодит цагийн гүйцэтгэл: өдөр бүрийн дохиог 30 хоногийн дараа шалгасан үр дүн.
+  Widget _buildTrackRecord(dynamic tr) {
+    if (tr is! Map) return SizedBox.shrink();
+    String pct(dynamic v) =>
+        v is num ? '${(v * 100).toStringAsFixed(1)}%' : '—';
+    final evaluated = (tr['evaluated'] as num?)?.toInt() ?? 0;
+    return Text(
+      evaluated == 0
+          ? 'Бодит гүйцэтгэл: дохионы бүртгэл ${tr['since'] ?? ''}-аас эхэлсэн '
+              '(${tr['logged']} өдөр), 30 хоногийн дараа үр дүн гарна.'
+          : 'Бодит гүйцэтгэл: $evaluated өдрийн дохионы шилдэг 5 нь бусдаас '
+              'дунджаар ${pct(tr['meanExcess'])} илүү, ${pct(tr['hitRate'])} '
+              'тохиолдолд давсан.',
+      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
     );
   }
 

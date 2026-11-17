@@ -12,11 +12,15 @@ class SignalExplanation extends StatelessWidget {
   final double baseRate;
   final int maxRows;
 
+  /// "зах зээлээс илүү өсөх магадлал" эсвэл "өсөх магадлал".
+  final String probLabel;
+
   const SignalExplanation({
     super.key,
     required this.signal,
     required this.baseRate,
-    this.maxRows = 11,
+    this.maxRows = 18,
+    this.probLabel = 'зах зээлээс илүү өсөх магадлал',
   });
 
   @override
@@ -51,8 +55,8 @@ class SignalExplanation extends StatelessWidget {
             SizedBox(width: 6),
             Expanded(
               child: Text(
-                '30 хоногт өсөх магадлал ${(signal.probUp * 100).toStringAsFixed(1)}% '
-                '(дундаж ${(baseRate * 100).toStringAsFixed(0)}%)',
+                '30 хоногт $probLabel ${(signal.probUp * 100).toStringAsFixed(1)}% '
+                '(арилжаалагддаг хувьцааны медиан ${(baseRate * 100).toStringAsFixed(1)}%)',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),

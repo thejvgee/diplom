@@ -26,6 +26,9 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
   final _target = TextEditingController(text: '20,000,000');
   final _initial = TextEditingController();
   final _cashRate = TextEditingController(text: '10');
+  final _inflation = TextEditingController(text: '7');
+  final _fee = TextEditingController(text: '1');
+  bool _glidePath = true;
   int _years = 3;
   String? _riskKey;
   GoalPlan? _plan;
@@ -46,6 +49,8 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
     _target.dispose();
     _initial.dispose();
     _cashRate.dispose();
+    _inflation.dispose();
+    _fee.dispose();
     super.dispose();
   }
 
@@ -70,6 +75,8 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
     final assumptions = MarketAssumptions.fromMetrics(
       market is Map ? Map<String, dynamic>.from(market) : null,
       cashAnnualRate: (_parse(_cashRate) / 100).clamp(0.0, 0.5),
+      inflationAnnual: (_parse(_inflation) / 100).clamp(0.0, 0.5),
+      annualFee: (_parse(_fee) / 100).clamp(0.0, 0.1),
     );
     final profile = RiskProfile.fromKey(_riskKey ?? 'Moderate');
     final plan = GoalPlanner(assumptions).plan(
@@ -77,6 +84,7 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
       years: _years,
       initial: _parse(_initial),
       stockShare: 1 - profile.targetCash,
+      glidePath: _glidePath,
     );
     if (!mounted) return;
     setState(() {
@@ -191,6 +199,44 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
+            SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _inflation,
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Инфляци (%/жил)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _fee,
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Зардал (%/жил)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 4),
+            Text(
+              'Бүх дүнг өнөөгийн мөнгөний үнэ цэнээр (инфляцийг хасаж) тооцно.',
+              style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('Зорилгод ойртох тусам эрсдэл бууруулах'),
+              subtitle: Text('Сүүлийн 3 жилд хувьцааны хувийг аажмаар багасгана'),
+              value: _glidePath,
+              onChanged: (v) => setState(() => _glidePath = v),
+            ),
           ],
         ),
       ),
@@ -260,6 +306,11 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
                   'Хүлээгдэх дүн (медиан): ${_money.format(median)}₮ · '
                   'нийт хуримтлуулах: ${_money.format(plan.totalContributed(_monthly))}₮',
                   style: TextStyle(fontSize: 12),
+                ),
+                Text(
+                  'Хамгийн муу 10% хувилбарт дунджаар: '
+                  '${_money.format(plan.worstTenPercent(_monthly))}₮',
+                  style: TextStyle(fontSize: 12, color: Colors.red.shade700),
                 ),
                 SizedBox(height: 16),
                 SizedBox(height: 220, child: _buildFanChart(plan, bands)),
@@ -376,13 +427,14 @@ class _GoalPlannerScreenState extends State<GoalPlannerScreen> {
             Text('Таамаглал', style: Theme.of(context).textTheme.titleSmall),
             SizedBox(height: 6),
             Text(
-              '• Хувьцаа ${pct(plan.stockShare)}, хадгаламж ${pct(1 - plan.stockShare)} '
-              '(сар бүр тэнцвэржүүлнэ)\n'
-              '• Хувьцааны жилийн өгөөж ~${pct(a.stockAnnualReturn)} (${a.source}, '
-              'тэнцүү жинтэй), хэлбэлзэл ${pct(a.stockAnnualVol)}\n'
-              '• Хадгаламжийн хүү ${pct(a.cashAnnualRate)}\n'
-              '• 2,000 санамсаргүй хувилбар (Monte Carlo), инфляци, татвар, '
-              'шимтгэл тооцоогүй (нэрлэсэн дүн)',
+              '• Хувьцаа ${pct(plan.stockShare)}'
+              '${plan.glidePath && plan.finalStockShare < plan.stockShare ? ' → эцэст нь ${pct(plan.finalStockShare)}' : ''}, '
+              'үлдсэн нь хадгаламж (сар бүр тэнцвэржүүлнэ)\n'
+              '• Хувьцааны өгөөж: ${a.usesBootstrap ? 'MSE-ийн бодит сарын өгөөжөөс 3 сарын блокоор санамсаргүй сонгосон (bootstrap)' : 'лог-нормаль тархалт'} '
+              '— ${a.source}, жилд ~${pct(a.stockAnnualReturn)}, хэлбэлзэл ≥${pct(a.stockAnnualVol)}\n'
+              '• Хадгаламжийн хүү ${pct(a.cashAnnualRate)}, инфляци ${pct(a.inflationAnnual)}, '
+              'хувьцааны зардал ${pct(a.annualFee)}/жил\n'
+              '• 2,000 санамсаргүй хувилбар (Monte Carlo); дүн өнөөгийн мөнгөөр, татвар тооцоогүй',
               style: TextStyle(fontSize: 12),
             ),
             SizedBox(height: 8),

@@ -72,7 +72,8 @@ void main() async {
   GeminiService()
     ..contextBuilder = grounding.context
     ..localAnswer = grounding.localAnswer
-    ..offlineAnswer = grounding.offlineAnswer;
+    ..offlineAnswer = grounding.offlineAnswer
+    ..toolHandler = grounding.tool;
 
   runApp(
     MultiProvider(

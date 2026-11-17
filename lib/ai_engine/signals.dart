@@ -23,6 +23,12 @@ class StockSignal {
   final double liquidity;
   final double rsi;
 
+  /// Сүүлийн 20 арилжааны өдрийн дундаж арилжааны дүн (₮/өдөр).
+  final double avgTurnover;
+
+  /// Ойролцоо салбар (компанийн нэрээр).
+  final String sector;
+
   /// Таамаглалд хамгийн их нөлөөлсөн шинжүүд: нэр -> нөлөө (жин × z-оноо).
   final Map<String, double> drivers;
 
@@ -42,6 +48,8 @@ class StockSignal {
     required this.drawdown60,
     required this.liquidity,
     required this.rsi,
+    this.avgTurnover = 0,
+    this.sector = 'Бусад',
     this.drivers = const {},
     this.features = const {},
   });
@@ -62,6 +70,8 @@ class StockSignal {
         'drawdown60': _r(drawdown60),
         'liquidity': _r(liquidity),
         'rsi': _r(rsi),
+        'avgTurnover': avgTurnover.roundToDouble(),
+        'sector': sector,
         'drivers': {for (final e in drivers.entries) e.key: _r(e.value)},
         'features': {for (final e in features.entries) e.key: _r(e.value)},
       };
@@ -79,6 +89,8 @@ class StockSignal {
         drawdown60: (j['drawdown60'] as num).toDouble(),
         liquidity: (j['liquidity'] as num).toDouble(),
         rsi: (j['rsi'] as num).toDouble(),
+        avgTurnover: (j['avgTurnover'] as num?)?.toDouble() ?? 0,
+        sector: j['sector'] as String? ?? 'Бусад',
         drivers: {
           for (final e in (j['drivers'] as Map? ?? {}).entries)
             e.key as String: (e.value as num).toDouble(),

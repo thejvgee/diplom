@@ -471,7 +471,7 @@ class _AIAdvisorScreenState extends State<AIAdvisorScreen> {
                       SizedBox(height: 4),
                       Row(
                         children: [
-                          Text('Өсөх магадлал: '),
+                          Text('Илүү өсөх магадлал: '),
                           Expanded(
                             child: LinearProgressIndicator(
                               value: _safeGetInt(recommendation,

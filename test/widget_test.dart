@@ -38,7 +38,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Санал болгох багц боловсруулах'), findsOneWidget);
-    expect(find.textContaining('Тест AUC'), findsOneWidget);
+    expect(find.textContaining('Walk-forward'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Санал болгох багц боловсруулах'));
     await tester.pumpAndSettle();
