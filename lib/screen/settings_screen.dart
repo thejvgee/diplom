@@ -1,11 +1,19 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ai_engine/risk_profile.dart';
 import '../providers/app_state.dart';
+import '../providers/mse_market_provider.dart';
+import '../providers/portfolio_provider.dart';
 import '../providers/user_preferences_provider.dart';
+import '../services/api_key_service.dart';
+import '../services/gemini_service.dart';
+import 'auth_gate.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
@@ -15,26 +23,15 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _storage = FlutterSecureStorage();
   bool _isLoading = true;
-  bool _useMockData = false;
   final _formKey = GlobalKey<FormState>();
 
-  bool _enableNotifications = true;
-  bool _enableMarketAlerts = true;
-  bool _enablePortfolioUpdates = true;
-  String _refreshInterval = '15 minutes';
-  String _selectedCurrency = 'MNT';
+  // Ханшийн шинэчлэлийн давтамж (MseMarketProvider-т шууд нөлөөлнө)
+  String _refreshInterval = MseMarketProvider.defaultRefreshOption;
   TextEditingController _nameController = TextEditingController();
   TextEditingController _emailController = TextEditingController();
 
-  final List<String> _currencies = ['MNT', 'EUR', 'USD'];
-
-  final List<String> _refreshIntervals = [
-    '5 minutes',
-    '15 minutes',
-    '30 minutes',
-    '1 hour',
-    'Manual'
-  ];
+  final List<String> _refreshIntervals =
+      MseMarketProvider.refreshOptions.keys.toList();
 
   @override
   void initState() {
@@ -55,17 +52,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      String? useMockDataStr = await _storage.read(key: 'use_mock_data');
-      _useMockData = useMockDataStr == 'true';
+      final saved = prefs.getString(MseMarketProvider.refreshPrefKey);
+      _refreshInterval = MseMarketProvider.refreshOptions.containsKey(saved)
+          ? saved!
+          : MseMarketProvider.defaultRefreshOption;
 
-      _enableNotifications = prefs.getBool('enable_notifications') ?? true;
-      _enableMarketAlerts = prefs.getBool('enable_market_alerts') ?? true;
-      _enablePortfolioUpdates = prefs.getBool('enable_portfolio_updates') ?? true;
-      _refreshInterval = prefs.getString('refresh_interval') ?? '15 minutes';
-      _selectedCurrency = prefs.getString('currency') ?? 'USD';
+      // Load user info
       _nameController.text = prefs.getString('userName') ?? '';
       _emailController.text = prefs.getString('userEmail') ?? '';
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load settings: $e')),
       );
@@ -76,11 +72,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _logout() async {
     try {
-      final _storage = FlutterSecureStorage();
+      // Firebase-ээс гарна (өмнө нь зөвхөн утасны санг цэвэрлэдэг байсан тул
+      // хэрэглэгч нэвтэрсэн хэвээр үлддэг байв)
+      await FirebaseAuth.instance.signOut();
+
       await _storage.deleteAll();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Гарахад алдаа гарлаа: $e')),
@@ -88,22 +89,156 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _toggleMockData(bool value) async {
-    try {
-      await _storage.write(key: 'use_mock_data', value: value.toString());
-      setState(() => _useMockData = value);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(value
-              ? 'Mock data enabled. App will use offline data.'
-              : 'Mock data disabled. App will use real data when available.'),
+  /// Gemini-ийн түлхүүрийг утасны нууц санд хадгална (APK/репод биш).
+  Future<void> _editGeminiKey() async {
+    final controller = TextEditingController();
+    final key = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('AI чатын түлхүүр (Gemini)'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Google AI Studio-оос авсан API түлхүүрээ оруулна уу. Түлхүүр '
+              'зөвхөн энэ утасны нууц санд хадгалагдана. Хоосон үлдээвэл '
+              'устгана.',
+              style: TextStyle(fontSize: 13),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'API түлхүүр',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: Text('Цуцлах')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: Text('Хадгалах')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (key == null) return;
+
+    if (key.isNotEmpty && !await ApiKeyService.validateGeminiApiKey(key)) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update setting: $e')),
+        SnackBar(content: Text('Түлхүүр хүчингүй эсвэл интернэт холболт алга')),
       );
+      return;
+    }
+    await ApiKeyService.saveGeminiApiKey(key);
+    await GeminiService().init();
+    if (!mounted) return;
+    setState(() {});
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(key.isEmpty ? 'Түлхүүр устгагдлаа' : 'Түлхүүр хадгалагдлаа'),
+    ));
+  }
+
+  Future<bool> _confirm(String title, String message, String action) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Цуцлах')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  /// Симуляцийн дансыг анхны 10 сая төгрөгтэй болгож шинээр эхлүүлнэ.
+  Future<void> _resetPortfolio() async {
+    if (!await _confirm(
+        'Багцыг шинээр эхлүүлэх үү?',
+        'Бүх хувьцаа, гүйлгээний түүх устаж, данс анхны '
+            '10,000,000₮ болно. Энэ үйлдлийг буцаах боломжгүй.',
+        'Шинээр эхлүүлэх')) return;
+    if (!mounted) return;
+    await context.read<PortfolioProvider>().resetPortfolio();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Багц шинээр эхэллээ')));
+  }
+
+  /// Бүртгэл болон бүх өгөгдлийг устгана (Google Play-ийн шаардлага).
+  Future<void> _deleteAccount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Firebase бүртгэл устгахад сүүлийн ~5 минутад нэвтэрсэн байх шаардлагатай.
+    // Өгөгдлийг устгаад бүртгэл устахгүй үлдэхээс сэргийлж урьдчилан шалгана.
+    final lastSignIn = user.metadata.lastSignInTime;
+    if (lastSignIn == null ||
+        DateTime.now().difference(lastSignIn) > Duration(minutes: 5)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Аюулгүй байдлын үүднээс гараад дахин нэвтэрч орсны '
+            'дараа бүртгэлээ устгана уу.'),
+        duration: Duration(seconds: 5),
+      ));
+      return;
+    }
+
+    if (!await _confirm(
+        'Бүртгэлээ устгах уу?',
+        'Таны бүртгэл, багц, гүйлгээний түүх, AI чатын түүх бүгд бүрмөсөн '
+            'устана. Энэ үйлдлийг буцаах боломжгүй.',
+        'Бүрмөсөн устгах')) return;
+    if (!mounted) return;
+
+    final portfolio = context.read<PortfolioProvider>();
+    try {
+      final db = FirebaseFirestore.instance;
+      final chats = await db
+          .collection('chat_history')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      final batch = db.batch();
+      for (final doc in chats.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+      await portfolio.deleteAllData();
+      await db.collection('users').doc(user.uid).delete();
+      await user.delete();
+
+      await _storage.deleteAll();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(e.code == 'requires-recent-login'
+            ? 'Дахин нэвтэрч орсны дараа бүртгэлээ устгана уу.'
+            : 'Бүртгэл устгахад алдаа гарлаа: ${e.message}'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Бүртгэл устгахад алдаа гарлаа: $e')));
     }
   }
 
@@ -112,51 +247,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return connectivityResult != ConnectivityResult.none;
   }
 
-  Future<void> _saveNotificationPreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('enable_notifications', _enableNotifications);
-      await prefs.setBool('enable_market_alerts', _enableMarketAlerts);
-      await prefs.setBool('enable_portfolio_updates', _enablePortfolioUpdates);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Notification preferences saved')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save notification preferences: $e')),
-      );
-    }
-  }
-
+  // Save refresh interval
   Future<void> _saveRefreshInterval(String interval) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('refresh_interval', interval);
+      await prefs.setString(MseMarketProvider.refreshPrefKey, interval);
+      if (!mounted) return;
+      context
+          .read<MseMarketProvider>()
+          .setRefreshInterval(MseMarketProvider.parseRefreshInterval(interval));
       setState(() => _refreshInterval = interval);
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Data refresh interval updated')),
+        SnackBar(content: Text('Ханшийн шинэчлэлт: $interval')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save refresh interval: $e')),
-      );
-    }
-  }
-
-  Future<void> _saveCurrency(String currency) async {
-    try {
-      final appState = Provider.of<AppState>(context, listen: false);
-      await appState.setCurrency(currency);
-      setState(() => _selectedCurrency = currency);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Валют шинэчлэгдлээ $currency')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Валют хадгалахад алдаа гарлаа: $e')),
+        SnackBar(content: Text('Хадгалахад алдаа гарлаа: $e')),
       );
     }
   }
@@ -168,11 +275,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await appState.updateUserInfo(
             _nameController.text, _emailController.text);
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Профайл амжилттай шинэчлэгдлээ')),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Профайл шинэчлэгдэхэд алдаа гарлаа: $e')),
       );
@@ -201,6 +310,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // User Profile Section
                   Text(
                     'Хэрэглэгчийн мэдээлэл',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -297,6 +407,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
+
+                  // Appearance Settings
                   Text(
                     'Appearance',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -334,6 +446,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
+
+                  // Security Settings
                   Text(
                     'Security',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -348,14 +462,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SwitchListTile(
-                            title: Text('Biometric Authentication'),
+                            title: Text('Биометр түгжээ'),
                             subtitle: Text(appState.isBiometricEnabled
-                                ? 'Enabled for app access'
-                                : 'Disabled'),
+                                ? 'Апп нээхэд хурууны хээ/царай асууна'
+                                : 'Унтраалттай'),
                             value: appState.isBiometricEnabled,
                             onChanged: (value) async {
+                              if (value) {
+                                final ok = await BiometricLock.confirm(
+                                    'Биометр түгжээг асаахын тулд баталгаажуулна уу');
+                                if (!ok) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            'Энэ төхөөрөмж биометр дэмжихгүй эсвэл баталгаажуулалт амжилтгүй')),
+                                  );
+                                  return;
+                                }
+                              }
                               await appState.toggleBiometric();
-                              setState(() {});
+                              if (mounted) setState(() {});
                             },
                             secondary: Icon(
                               Icons.fingerprint,
@@ -370,90 +497,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
-                  Text(
-                    'Мэдэгдэл',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  SizedBox(height: 16.0),
 
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SwitchListTile(
-                            title: Text('Enable Notifications'),
-                            subtitle: Text(_enableNotifications
-                                ? 'Та аппликейшнаас мэдэгдэл хүлээн авах болно'
-                                : 'Бүх мэдэгдэл идэвхгүй байна'),
-                            value: _enableNotifications,
-                            onChanged: (value) {
-                              setState(() {
-                                _enableNotifications = value;
-                                if (!value) {
-                                  _enableMarketAlerts = false;
-                                  _enablePortfolioUpdates = false;
-                                }
-                              });
-                              _saveNotificationPreferences();
-                            },
-                            secondary: Icon(
-                              _enableNotifications
-                                  ? Icons.notifications_active
-                                  : Icons.notifications_off,
-                              color: _enableNotifications
-                                  ? Colors.blue
-                                  : Colors.grey,
-                            ),
-                          ),
-                          Divider(),
-                          SwitchListTile(
-                            title: Text('Зах зээлийн сэрэмжлүүлэг'),
-                            subtitle: Text('Үнийн өөрчлөлт, зах зээлийн мэдээ'),
-                            value: _enableMarketAlerts && _enableNotifications,
-                            onChanged: _enableNotifications
-                                ? (value) {
-                                    setState(() => _enableMarketAlerts = value);
-                                    _saveNotificationPreferences();
-                                  }
-                                : null,
-                            secondary: Icon(
-                              Icons.trending_up,
-                              color:
-                                  (_enableMarketAlerts && _enableNotifications)
-                                      ? Colors.blue
-                                      : Colors.grey,
-                            ),
-                          ),
-                          SwitchListTile(
-                            title: Text('Багцын шинэчлэлт'),
-                            subtitle: Text(
-                                'Таны holding болон гүйцэтгэлд гарсан өөрчлөлтүүд'),
-                            value:
-                                _enablePortfolioUpdates && _enableNotifications,
-                            onChanged: _enableNotifications
-                                ? (value) {
-                                    setState(
-                                        () => _enablePortfolioUpdates = value);
-                                    _saveNotificationPreferences();
-                                  }
-                                : null,
-                            secondary: Icon(
-                              Icons.account_balance_wallet,
-                              color: (_enablePortfolioUpdates &&
-                                      _enableNotifications)
-                                  ? Colors.blue
-                                  : Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 24.0),
+                  // Preferences
                   Text(
                     'Сонголтууд',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -467,77 +512,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.0, vertical: 8.0),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.currency_exchange,
-                                        color: Colors.grey.shade600),
-                                    SizedBox(width: 16.0),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Валют',
-                                            style: TextStyle(fontSize: 16.0),
-                                          ),
-                                          SizedBox(height: 4.0),
-                                          Text(
-                                            'Ашиглах валютаа сонгоно уу',
-                                            style: TextStyle(
-                                                fontSize: 14.0,
-                                                color: Colors.grey.shade600),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 16.0, vertical: 8.0),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 12.0, vertical: 4.0),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(8.0),
-                                    border:
-                                        Border.all(color: Colors.grey.shade300),
-                                    color: Theme.of(context).cardColor,
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: _selectedCurrency,
-                                      isExpanded: true,
-                                      icon: Icon(Icons.arrow_drop_down),
-                                      onChanged: (String? newValue) {
-                                        if (newValue != null) {
-                                          _saveCurrency(newValue);
-                                        }
-                                      },
-                                      items: _currencies
-                                          .map<DropdownMenuItem<String>>(
-                                              (String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Divider(),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -595,15 +569,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                               .setRiskTolerance(newValue);
                                         }
                                       },
-                                      items: UserPreferencesProvider
-                                          .riskToleranceOptions
-                                          .map<DropdownMenuItem<String>>(
-                                              (String value) {
-                                        return DropdownMenuItem<String>(
-                                          value: value,
-                                          child: Text(value),
-                                        );
-                                      }).toList(),
+                                      items: [
+                                        for (final p in RiskProfile.all)
+                                          DropdownMenuItem<String>(
+                                            value: p.key,
+                                            child: Text(p.label),
+                                          ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -628,12 +600,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Өгөгдөл рэфреш интервал',
+                                            'Ханшийн шинэчлэлт',
                                             style: TextStyle(fontSize: 16.0),
                                           ),
                                           SizedBox(height: 4.0),
                                           Text(
-                                            'Та мэдээллийг хэдэн минут тутам шинэчлэх вэ',
+                                            'Арилжааны цагаар хувьцааны ханшийг хэр давтамжтай татах вэ',
                                             style: TextStyle(
                                                 fontSize: 14.0,
                                                 color: Colors.grey.shade600),
@@ -687,73 +659,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
 
                   SizedBox(height: 24.0),
+
+                  // AI чат
                   Text(
-                    'Data Settings',
+                    'AI чат',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   SizedBox(height: 16.0),
-
                   Card(
                     elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Mock Data Mode',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
-                          SizedBox(height: 8.0),
-                          Text(
-                            'Идэвхжүүлсэн үед апп нь API дуудлага хийхийн оронд дотооддоо үүсгэсэн хуурамч өгөгдлийг ашиглана. Энэ нь тест хийх эсвэл интернетийн холболт хязгаарлагдмал үед хэрэг болно.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                          SizedBox(height: 16.0),
-                          SwitchListTile(
-                            title: Text('Use Mock Data'),
-                            subtitle: Text(_useMockData
-                                ? 'Using offline demo data'
-                                : 'Using real-time market data when available'),
-                            value: _useMockData,
-                            onChanged: _toggleMockData,
-                            secondary: Icon(
-                              _useMockData ? Icons.cloud_off : Icons.cloud_done,
-                              color:
-                                  _useMockData ? Colors.orange : Colors.green,
-                            ),
-                          ),
-                          if (_useMockData)
-                            Container(
-                              padding: EdgeInsets.all(8.0),
-                              color: Colors.orange.shade50,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.info_outline,
-                                      color: Colors.orange),
-                                  SizedBox(width: 8.0),
-                                  Expanded(
-                                    child: Text(
-                                      'Mock data горим идэвхижсэн. The app will show simulated data.',
-                                      style: TextStyle(
-                                          color: Colors.orange.shade800),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
+                    child: ListTile(
+                      leading: Icon(Icons.key),
+                      title: Text('AI чатын түлхүүр (Gemini)'),
+                      subtitle: Text(GeminiService().hasApiKey
+                          ? 'Тохируулсан — утасны нууц санд'
+                          : 'Тохируулаагүй — чат нь апп-ын AI загвараар л хариулна'),
+                      onTap: _editGeminiKey,
                     ),
                   ),
 
                   SizedBox(height: 24.0),
+
+                  // Данс
+                  Text(
+                    'Данс',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  SizedBox(height: 16.0),
+                  Card(
+                    elevation: 2,
+                    child: Column(
+                      children: [
+                        ListTile(
+                          leading: Icon(Icons.restart_alt),
+                          title: Text('Симуляцийн багцыг шинээр эхлүүлэх'),
+                          subtitle: Text('Данс анхны 10,000,000₮ болно'),
+                          onTap: _resetPortfolio,
+                        ),
+                        Divider(height: 1),
+                        ListTile(
+                          leading:
+                              Icon(Icons.delete_forever, color: Colors.red),
+                          title: Text('Бүртгэл устгах',
+                              style: TextStyle(color: Colors.red)),
+                          subtitle: Text('Бүх өгөгдөл бүрмөсөн устана'),
+                          onTap: _deleteAccount,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 24.0),
+
+                  // Network Status
                   Text(
                     'Network Status',
                     style: Theme.of(context).textTheme.headlineSmall,
@@ -795,7 +753,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     Text(
                                       isConnected
                                           ? 'Та интернетэд холболттой байна. Бодит цагийн өгөгдлийг татаж авах боломжтой.'
-                                          : 'Интернэт холболтгүй байна. Апп нь кэш эсвэл mock data ашиглах болно.',
+                                          : 'Интернэт холболтгүй байна. Апп нь хамгийн сүүлд хадгалсан өгөгдлийг харуулна.',
                                       style: TextStyle(
                                         color: isConnected
                                             ? Colors.green.shade700
@@ -814,28 +772,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   SizedBox(height: 24.0),
 
+                  // About
                   Text(
                     'About',
                     style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  SizedBox(height: 16.0),
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _logout,
-                          icon: Icon(Icons.logout),
-                          label: Text('Гарах'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
                   ),
                   SizedBox(height: 16.0),
                   Card(
@@ -900,6 +840,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                       icon: Icon(Icons.info_outline),
                       label: Text('About this app'),
+                    ),
+                  ),
+                  SizedBox(height: 16.0),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _logout,
+                          icon: Icon(Icons.logout),
+                          label: Text('Гарах'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

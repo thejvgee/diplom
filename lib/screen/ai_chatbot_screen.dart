@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../services/gemini_service.dart';
@@ -19,7 +18,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   final TextEditingController _controller = TextEditingController();
   late GeminiService _geminiService;
   bool _isLoading = false;
-  bool _isError = false;
   bool _isUsingDemoMode = false;
   int _retryCount = 0;
   static const int _maxRetries = 3;
@@ -50,11 +48,10 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   Future<void> _initializeChat() async {
     setState(() {
       _isLoading = true;
-      _isError = false;
     });
     try {
       final response = await _geminiService.startChat();
-      final bool possibleApiKeyIssue = response.contains("problem with the API") || response.contains("backup service");
+      final bool possibleApiKeyIssue = GeminiService.isOfflineReply(response);
       setState(() {
         _messages.add({
           'sender': 'Хиймэл оюун зөвлөх',
@@ -68,7 +65,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
       });
     } catch (e) {
       setState(() {
-        _isError = true;
         _isLoading = false;
         _isUsingDemoMode = true;
         _messages.add({
@@ -96,32 +92,21 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         'timestamp': DateTime.now().toString(),
       });
       _isLoading = true;
-      _isError = false;
       _showSuggestions = false;
     });
 
     try {
       final response = await _geminiService.sendMessage(message);
-      final bool isErrorResponse = response.contains('No internet connection') ||
-          response.contains('Unable to connect') ||
-          response.contains('Invalid API key') ||
-          response.contains('I apologize') ||
-          response.contains('trouble accessing') ||
-          response.contains('error processing');
-      final bool isUsingDemo = response.contains('Please note this is general advice') ||
-          response.contains('This is simplified advice') ||
-          response.contains('This general advice may need adjustment') ||
-          response.contains('This is general guidance');
+      // Gemini холбогдоогүй үед апп-ын AI загварын тоймыг харуулдаг
+      final bool isUsingDemo = GeminiService.isOfflineReply(response);
 
       setState(() {
         _messages.add({
           'sender': 'Хиймэл оюун зөвлөх',
           'text': response,
           'timestamp': DateTime.now().toString(),
-          'isError': isErrorResponse ? true : null,
           'isDemo': isUsingDemo,
         });
-        _isError = isErrorResponse;
         _isUsingDemoMode = _isUsingDemoMode || isUsingDemo;
         _isLoading = false;
       });
@@ -145,7 +130,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           });
           _showSuggestions = true;
         }
-        _isError = true;
         _isLoading = false;
       });
     }
@@ -286,14 +270,18 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           .collection('chat_history')
           .doc(messageId)
           .delete();
+
+      // Remove from local list
       setState(() {
         _chatHistoryList.removeWhere((item) => item['id'] == messageId);
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чат устгагдлаа')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чат устгах үед алдаа гарлаа: $e')),
       );
@@ -333,6 +321,8 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
           .collection('chat_history')
           .doc(messageId)
           .update({'preview': newPreview});
+
+      // Reflect the change locally
       setState(() {
         final index = _chatHistoryList
             .indexWhere((item) => item['id'] == messageId);
@@ -341,10 +331,12 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
         }
       });
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чатыг амжилттай шинэчиллээ')),
       );
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Чатыг шинэчлэхэд алдаа гарлаа: $e')),
       );
@@ -594,12 +586,14 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Rename icon
                         IconButton(
                           icon: Icon(Icons.edit, size: 20),
                           onPressed: () => _confirmRenameChat(
                               item['id'], item['preview']),
                           tooltip: 'Нэр солих',
                         ),
+                        // Delete icon
                         IconButton(
                           icon: Icon(Icons.delete, size: 20),
                           onPressed: () =>
@@ -669,7 +663,9 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   String _formatAIResponse(String text) {
-    final bool isInvestmentRecommendation = text.contains('Based on your investment amount') ||text.contains('here are the best options');
+    final bool isInvestmentRecommendation = text.contains(
+        'Based on your investment amount') ||
+        text.contains('here are the best options');
     if (isInvestmentRecommendation) {
       return _formatInvestmentRecommendation(text);
     }
@@ -682,8 +678,6 @@ class _AIChatbotScreenState extends State<AIChatbotScreen> {
   }
 
   String _formatInvestmentRecommendation(String text) {
-    final parts = text.split('\n\n');
-    String header = parts.isNotEmpty ? parts[0] : '';
     final formattedText = text.replaceAllMapped(
         RegExp(
             r'^(\d+\.\s+)([A-Z]+(?:\.[A-Z])?):\s+([^-]+)\s*-\s*(.+)$',

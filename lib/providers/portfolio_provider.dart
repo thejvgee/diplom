@@ -1,483 +1,423 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show DocumentReference, FirebaseFirestore;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/holding.dart';
 import '../models/transaction.dart';
-import '../services/market_data_service.dart';
 
+/// Симуляцийн хөрөнгө оруулалтын данс.
+///
+/// * Хэрэглэгч бүрийн багц тусдаа: Firestore-ийн `users/{uid}/portfolio/state`
+///   баримтад хадгалагдаж, утсанд кэшлэгдэнэ (интернэтгүй үед ч ажиллана).
+/// * Хувьцаа, гүйлгээ, бэлэн мөнгө, өдөр тутмын үнэлгээний түүх бүгд
+///   хадгалагдана — апп дахин нээхэд алдагдахгүй.
 class PortfolioProvider extends ChangeNotifier {
-  final MarketDataService _marketDataService;
+  /// Шинэ хэрэглэгчид олгох симуляцийн эхний мөнгө.
+  static const double initialCash = 10000000;
+  static const int _maxHistoryPoints = 730;
+
+  final PortfolioRemoteStore? _remote;
+  final Future<SharedPreferences> Function() _prefs;
+  StreamSubscription<String?>? _authSub;
+
   List<Holding> _holdings = [];
   List<Transaction> _transactions = [];
-  double _cashBalance = 10000000.0; // Starting with 10 say
+  double _cashBalance = initialCash;
+  List<ValuePoint> _valueHistory = [];
+  Map<String, double> _previousCloses = {};
+  int _updatedAt = 0;
+
+  String? _uid;
+  int _loadToken = 0;
   bool _isLoading = true;
   String _error = '';
-  
+  DateTime? _lastHistorySave;
+  bool _disposed = false;
+
+  PortfolioProvider({
+    PortfolioRemoteStore? remote,
+    Stream<String?>? userIds,
+    Future<SharedPreferences> Function()? prefs,
+  })  : _remote = remote ?? (userIds == null ? FirestorePortfolioStore() : null),
+        _prefs = prefs ?? SharedPreferences.getInstance {
+    final ids = userIds ??
+        FirebaseAuth.instance.authStateChanges().map((u) => u?.uid);
+    _authSub = ids.listen(_switchUser);
+  }
+
   // Getters
-  List<Holding> get holdings => _holdings;
-  List<Transaction> get transactions => _transactions;
+  List<Holding> get holdings => List.unmodifiable(_holdings);
+  List<Transaction> get transactions => List.unmodifiable(_transactions);
   double get cashBalance => _cashBalance;
+  List<ValuePoint> get valueHistory => List.unmodifiable(_valueHistory);
   bool get isLoading => _isLoading;
   String get error => _error;
   bool get hasError => _error.isNotEmpty;
-  
-  // Const
-  static const String _transactionsKey = 'transactions';
-  static const String _holdingsKey = 'holdings';
-  static const String _cashBalanceKey = 'cash_balance';
-  
-  // Constructor
-  PortfolioProvider({required MarketDataService marketDataService}) 
-      : _marketDataService = marketDataService {
-    _loadData();
-  }
-  
-  // Load data
-  Future<void> _loadData() async {
+  String? get userId => _uid;
+
+  double get holdingsValue => _holdings.fold<double>(
+      0, (sum, h) => sum + h.quantity * (h.currentPrice > 0 ? h.currentPrice : h.averageCost));
+
+  double get totalValue => _cashBalance + holdingsValue;
+
+  // ---------------------------------------------------------------------------
+  // Ачаалах / хадгалах
+  // ---------------------------------------------------------------------------
+
+  Future<void> _switchUser(String? uid) async {
+    final token = ++_loadToken;
+    _uid = uid;
+    _resetState();
+    _isLoading = true;
+    _notify();
+
     try {
-      _setLoading(true);
-      _clearError();
-      final prefs = await SharedPreferences.getInstance();      
-      final transactionsJson = prefs.getString(_transactionsKey);
-      if (transactionsJson != null) {
-        _transactions = Transaction.listFromJson(transactionsJson);
-      }      
-      final cashBalance = prefs.getDouble(_cashBalanceKey);
-      if (cashBalance != null) {
-        _cashBalance = cashBalance;
+      final local = await _loadLocal(uid);
+      if (token != _loadToken) return;
+      if (local != null) _apply(local);
+      _isLoading = local == null && uid != null && _remote != null;
+      _notify();
+
+      if (uid != null && _remote != null) {
+        Map<String, dynamic>? remote;
+        try {
+          remote = await _remote.load(uid);
+        } catch (e) {
+          debugPrint('Portfolio remote load failed: $e');
+        }
+        if (token != _loadToken) return;
+        final remoteAt = (remote?['updatedAt'] as num?)?.toInt() ?? -1;
+        if (remote != null && remoteAt >= _updatedAt) {
+          _apply(remote);
+          await _saveLocal();
+        } else if (local != null) {
+          // Утсан дээрх хувилбар шинэ (жишээ нь офлайн гүйлгээ) → серверт илгээнэ
+          unawaited(_saveRemote());
+        } else {
+          await _save(); // Шинэ хэрэглэгч: эхний дансыг үүсгэнэ
+        }
+      } else if (local == null) {
+        await _save();
       }
-      
-      // zasna
-      if (_transactions.isEmpty) {
-        addSampleHoldings();
-      }
-      
-      notifyListeners();
+      _error = '';
     } catch (e) {
-      _setError('Failed to load portfolio data: $e');
+      _error = 'Багцын мэдээлэл ачаалахад алдаа гарлаа: $e';
     } finally {
-      _setLoading(false);
-    }
-  }
-  
-  Future<void> _saveData() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_transactionsKey, Transaction.listToJson(_transactions));
-      
-      await prefs.setDouble(_cashBalanceKey, _cashBalance);
-    } catch (e) {
-      print('Error saving portfolio data: $e');
-      //  error state bitgii hii UI ajilahgu
-    }
-  }
-  
-  Future<bool> buyStock(String symbol, double quantity, double price) async {
-    if (quantity <= 0 || price <= 0) {
-      return false;
-    }
-    
-    final totalCost = quantity * price;
-    
-    if (totalCost > _cashBalance) {
-      return false;
-    }
-    
-    try {
-      _cashBalance -= totalCost;      
-      final existingHoldingIndex = _holdings.indexWhere((h) => h.symbol == symbol);
-      if (existingHoldingIndex >= 0) {
-        final existingHolding = _holdings[existingHoldingIndex];
-        final newQuantity = existingHolding.quantity + quantity;
-        final newAverageCost = ((existingHolding.totalCost + totalCost) / newQuantity);
-        _holdings[existingHoldingIndex] = existingHolding.copyWith(
-          quantity: newQuantity,
-          averageCost: newAverageCost,
-        );
-      } else {
-        _holdings.add(Holding(
-          symbol: symbol,
-          quantity: quantity,
-          averageCost: price,
-          currentPrice: price,
-        ));
-      }
-      
-      final transaction = Transaction(
-        symbol: symbol,
-        action: 'buy',
-        quantity: quantity,
-        price: price,
-        totalAmount: totalCost,
-        timestamp: DateTime.now(),
-      );
-      _transactions.add(transaction);      
-      await _saveData();
-      notifyListeners();
-      return true;
-    } catch (e) {
-      print('Error buying stock: $e');
-      return false;
-    }
-  }  
-  Future<bool> sellStock(String symbol, double quantity, double price) async {
-    if (quantity <= 0 || price <= 0) {
-      return false;
-    }    
-    final existingHoldingIndex = _holdings.indexWhere((h) => h.symbol == symbol);
-    
-    if (existingHoldingIndex < 0) {
-      return false;
-    }
-    final existingHolding = _holdings[existingHoldingIndex];    
-    if (existingHolding.quantity < quantity) {
-      return false;
-    }
-    
-    try {
-      final totalSaleAmount = quantity * price;
-      _cashBalance += totalSaleAmount;
-      final remainingQuantity = existingHolding.quantity - quantity;
-      if (remainingQuantity > 0) {
-        _holdings[existingHoldingIndex] = existingHolding.copyWith(
-          quantity: remainingQuantity,
-        );
-      } else {
-        _holdings.removeAt(existingHoldingIndex);
-      }
-      
-      final transaction = Transaction(
-        symbol: symbol,
-        action: 'sell',
-        quantity: quantity,
-        price: price,
-        totalAmount: totalSaleAmount,
-        timestamp: DateTime.now(),
-      );
-      
-      _transactions.add(transaction);
-      
-      await _saveData();
-      
-      notifyListeners();
-      return true;
-    } catch (e) {
-      print('Error selling stock: $e');
-      return false;
-    }
-  }
-  
-  Future<void> addCash(double amount) async {
-    if (amount <= 0) return;
-    
-    try {
-      _cashBalance += amount;      
-      final transaction = Transaction(
-        symbol: 'CASH',
-        action: 'deposit',
-        quantity: 1,
-        price: amount,
-        totalAmount: amount,
-        timestamp: DateTime.now(),
-      );
-      _transactions.add(transaction);      
-      await _saveData();
-      notifyListeners();
-    } catch (e) {
-      print('Error adding cash: $e');
-    }
-  }  
-  List<Transaction> getTransactionsForSymbol(String symbol) {
-    return _transactions.where((t) => t.symbol == symbol).toList();
-  }  
-  List<Transaction> getRecentTransactions({int days = 30}) {
-    final cutoffDate = DateTime.now().subtract(Duration(days: days));
-    return _transactions
-        .where((t) => t.timestamp.isAfter(cutoffDate))
-        .toList()
-        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-  }
-  
-  Future<double> getTotalPortfolioValue() async {
-    double totalValue = _cashBalance;
-    
-    for (var holding in _holdings) {
-      try {
-        // In a real app, mse gees api ogwol fetch hiine
-        final currentPrice = holding.averageCost * (0.9 + (0.2 * (DateTime.now().millisecondsSinceEpoch % 100) / 100));
-        totalValue += holding.quantity * currentPrice;
-      } catch (e) {
-        totalValue += holding.totalCost;
+      if (token == _loadToken) {
+        _isLoading = false;
+        _notify();
       }
     }
-    
-    return totalValue;
   }
-  
-  Map<String, double> getPortfolioPerformance() {
-    return {
-      'daily': (_getRandomPerformance() * 0.01), // e.g., 0.02 (2%)
-      'weekly': (_getRandomPerformance() * 0.03),
-      'monthly': (_getRandomPerformance() * 0.05),
-      'yearly': (_getRandomPerformance() * 0.12),
-    };
+
+  void _resetState() {
+    _holdings = [];
+    _transactions = [];
+    _cashBalance = initialCash;
+    _valueHistory = [];
+    _updatedAt = 0;
   }
-  
-  double _getRandomPerformance() {
-    final base = DateTime.now().millisecond % 10;
-    if (base < 3) return -1.0 * (base + 1);  // 30% chance negative
-    return base / 2.0;  // 70% chance positive
-  }
-  
-  void addSampleHoldings() {
+
+  Map<String, dynamic> toJson() => {
+        'version': 2,
+        'cashBalance': _cashBalance,
+        'holdings': [for (final h in _holdings) h.toJson()],
+        'transactions': [for (final t in _transactions) t.toJson()],
+        'valueHistory': [for (final p in _valueHistory) p.toJson()],
+        'updatedAt': _updatedAt,
+      };
+
+  void _apply(Map<String, dynamic> json) {
+    _cashBalance = (json['cashBalance'] as num?)?.toDouble() ?? initialCash;
     _holdings = [
-      Holding(
-        symbol: 'AARD',
-        quantity: 10,
-        averageCost: 2450.0,
-        sector: 'Technology',
-        currentPrice: 2474.0,
-      ),
-      Holding(
-        symbol: 'ADB',
-        quantity: 10,
-        averageCost: 100.0,
-        sector: 'Technology',
-        currentPrice: 102.00,
-      ),
-      Holding(
-        symbol: 'APU',
-        quantity: 10,
-        averageCost: 978.85,
-        sector: 'Technology',
-        currentPrice: 976.79,
-      ),
-      Holding(
-        symbol: 'BODI',
-        quantity: 10,
-        averageCost: 82.0,
-        sector: 'Consumer Cyclical',
-        currentPrice: 80.0,
-      ),
-      Holding(
-        symbol: 'SUU',
-        quantity: 10,
-        averageCost: 619.62,
-        sector: 'Financials',
-        currentPrice: 624.0,
-      ),
-      Holding(
-        symbol: 'GLMT',
-        quantity: 8,
-        averageCost: 1044.0,
-        sector: 'Financials',
-        currentPrice: 1040.0,
-      ),
+      for (final h in json['holdings'] as List? ?? [])
+        Holding.fromJson(Map<String, dynamic>.from(h as Map))
     ];
-    
     _transactions = [
-      Transaction(
-        symbol: 'AARD',
-        action: 'buy',
-        quantity: 10,
-        price: 2450.0,
-        totalAmount: 5408164.0,
-        timestamp: DateTime.now().subtract(Duration(days: 60)),
-      ),
-      Transaction(
-        symbol: 'ADB',
-        action: 'buy',
-        quantity: 10,
-        price: 100.0,
-        totalAmount: 716700.0,
-        timestamp: DateTime.now().subtract(Duration(days: 45)),
-      ),
-      Transaction(
-        symbol: 'APU',
-        action: 'buy',
-        quantity: 10,
-        price: 978.85,
-        totalAmount: 18043142.05,
-        timestamp: DateTime.now().subtract(Duration(days: 30)),
-      ),
-      Transaction(
-        symbol: 'BODI',
-        action: 'buy',
-        quantity: 10,
-        price: 82.0,
-        totalAmount: 480.0,
-        timestamp: DateTime.now().subtract(Duration(days: 25)),
-      ),
-      Transaction(
-        symbol: 'GAZR',
-        action: 'buy',
-        quantity: 10,
-        price: 45.0,
-        totalAmount: 10.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
-      Transaction(
-        symbol: 'GLMT',
-        action: 'buy',
-        quantity: 10,
-        price: 1030.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 60)),
-      ),
-      Transaction(
-        symbol: 'GOV',
-        action: 'buy',
-        quantity: 10,
-        price: 267.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 45)),
-      ),
-      Transaction(
-        symbol: 'INV',
-        action: 'buy',
-        quantity: 10,
-        price: 9580.85,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 30)),
-      ),
-      Transaction(
-        symbol: 'KHAN',
-        action: 'buy',
-        quantity: 10,
-        price: 1070.0,
-        totalAmount: 30.0,
-        timestamp: DateTime.now().subtract(Duration(days: 25)),
-      ),
-      Transaction(
-        symbol: 'LEND',
-        action: 'buy',
-        quantity: 10,
-        price: 147.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
-      Transaction(
-        symbol: 'MFC',
-        action: 'buy',
-        quantity: 10,
-        price: 81.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 60)),
-      ),
-      Transaction(
-        symbol: 'MIK',
-        action: 'buy',
-        quantity: 10,
-        price: 12000.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 45)),
-      ),
-      Transaction(
-        symbol: 'MNDL',
-        action: 'buy',
-        quantity: 10,
-        price: 70.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 25)),
-      ),
-      Transaction(
-        symbol: 'MSE',
-        action: 'buy',
-        quantity: 10,
-        price: 288.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
-      Transaction(
-        symbol: 'NEH',
-        action: 'buy',
-        quantity: 10,
-        price: 24.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 60)),
-      ),
-      Transaction(
-        symbol: 'SBM',
-        action: 'buy',
-        quantity: 10,
-        price: 100.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 45)),
-      ),
-      Transaction(
-        symbol: 'SUU',
-        action: 'buy',
-        quantity: 10,
-        price: 609.0,
-        totalAmount: 20.00,
-        timestamp: DateTime.now().subtract(Duration(days: 30)),
-      ),
-      Transaction(
-        symbol: 'TCK',
-        action: 'buy',
-        quantity: 10,
-        price: 82.0,
-        totalAmount: 40.0,
-        timestamp: DateTime.now().subtract(Duration(days: 25)),
-      ),
-      Transaction(
-        symbol: 'TDB',
-        action: 'buy',
-        quantity: 10,
-        price: 23880.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
-      Transaction(
-        symbol: 'TTL',
-        action: 'buy',
-        quantity: 10,
-        price: 29440.0,
-        totalAmount: 20.0,
-        timestamp: DateTime.now().subtract(Duration(days: 25)),
-      ),
-      Transaction(
-        symbol: 'TUM',
-        action: 'buy',
-        quantity: 10,
-        price: 360.0,
-        totalAmount: 30.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
-      Transaction(
-        symbol: 'XAC',
-        action: 'buy',
-        quantity: 10,
-        price: 850.0,
-        totalAmount: 30.0,
-        timestamp: DateTime.now().subtract(Duration(days: 15)),
-      ),
+      for (final t in json['transactions'] as List? ?? [])
+        Transaction.fromJson(Map<String, dynamic>.from(t as Map))
     ];
-    _cashBalance = 10000.0 - 1800.0 - 1650.0 - 1080.0 - 480.0 - 1015.0 - 960.0;    
-    notifyListeners();
-  }  
-  Future<void> clearPortfolioData() async {
+    _valueHistory = [
+      for (final p in json['valueHistory'] as List? ?? [])
+        ValuePoint.fromJson(Map<String, dynamic>.from(p as Map))
+    ];
+    _updatedAt = (json['updatedAt'] as num?)?.toInt() ?? 0;
+  }
+
+  String _localKey(String? uid) => 'portfolio_v2_${uid ?? 'guest'}';
+
+  Future<Map<String, dynamic>?> _loadLocal(String? uid) async {
+    final prefs = await _prefs();
+    final raw = prefs.getString(_localKey(uid));
+    if (raw == null) return null;
+    return jsonDecode(raw) as Map<String, dynamic>;
+  }
+
+  Future<void> _saveLocal() async {
+    final prefs = await _prefs();
+    await prefs.setString(_localKey(_uid), jsonEncode(toJson()));
+  }
+
+  Future<void> _saveRemote() async {
+    final uid = _uid;
+    if (uid == null || _remote == null) return;
     try {
-      _holdings = [];
-      _transactions = [];
-      _cashBalance = 10000.0;      
-      await _saveData();
-      notifyListeners();
+      await _remote.save(uid, toJson());
     } catch (e) {
-      print('Error clearing portfolio data: $e');
+      // Офлайн үед Firestore өөрөө дараалалд хийдэг; бусад алдааг л бүртгэнэ.
+      debugPrint('Portfolio remote save failed: $e');
     }
-  }  
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
   }
-  
-  void _setError(String errorMessage) {
-    _error = errorMessage;
-    notifyListeners();
+
+  Future<void> _save() async {
+    _updatedAt = DateTime.now().millisecondsSinceEpoch;
+    _recordSnapshot();
+    await _saveLocal();
+    unawaited(_saveRemote());
   }
-  
-  void _clearError() {
-    _error = '';
-    notifyListeners();
+
+  // ---------------------------------------------------------------------------
+  // Гүйлгээ
+  // ---------------------------------------------------------------------------
+
+  Future<bool> buyStock(String symbol, double quantity, double price) async {
+    if (quantity <= 0 || price <= 0 || _isLoading) return false;
+    final totalCost = quantity * price;
+    if (totalCost > _cashBalance + 1e-6) return false;
+
+    _cashBalance -= totalCost;
+    final i = _holdings.indexWhere((h) => h.symbol == symbol);
+    if (i >= 0) {
+      final h = _holdings[i];
+      final newQty = h.quantity + quantity;
+      _holdings[i] = h.copyWith(
+        quantity: newQty,
+        averageCost: (h.totalCost + totalCost) / newQty,
+        currentPrice: price,
+      );
+    } else {
+      _holdings.add(Holding(
+        symbol: symbol,
+        quantity: quantity,
+        averageCost: price,
+        currentPrice: price,
+      ));
+    }
+    _transactions.add(Transaction(
+      symbol: symbol,
+      action: 'buy',
+      quantity: quantity,
+      price: price,
+      totalAmount: totalCost,
+      timestamp: DateTime.now(),
+    ));
+    return _commit();
   }
-} 
+
+  Future<bool> sellStock(String symbol, double quantity, double price) async {
+    if (quantity <= 0 || price <= 0 || _isLoading) return false;
+    final i = _holdings.indexWhere((h) => h.symbol == symbol);
+    if (i < 0 || _holdings[i].quantity < quantity - 1e-9) return false;
+
+    final amount = quantity * price;
+    _cashBalance += amount;
+    final remaining = _holdings[i].quantity - quantity;
+    if (remaining > 1e-9) {
+      _holdings[i] = _holdings[i].copyWith(quantity: remaining, currentPrice: price);
+    } else {
+      _holdings.removeAt(i);
+    }
+    _transactions.add(Transaction(
+      symbol: symbol,
+      action: 'sell',
+      quantity: quantity,
+      price: price,
+      totalAmount: amount,
+      timestamp: DateTime.now(),
+    ));
+    return _commit();
+  }
+
+  Future<void> addCash(double amount) async {
+    if (amount <= 0 || _isLoading) return;
+    _cashBalance += amount;
+    _transactions.add(Transaction(
+      symbol: 'CASH',
+      action: 'deposit',
+      quantity: 1,
+      price: amount,
+      totalAmount: amount,
+      timestamp: DateTime.now(),
+    ));
+    await _commit();
+  }
+
+  Future<bool> _commit() async {
+    try {
+      await _save();
+      _notify();
+      return true;
+    } catch (e) {
+      _error = 'Хадгалахад алдаа гарлаа: $e';
+      _notify();
+      return false;
+    }
+  }
+
+  /// Дансыг анхны төлөвт оруулна (симуляцийг шинээр эхлүүлэх).
+  Future<void> resetPortfolio() async {
+    _resetState();
+    await _commit();
+  }
+
+  /// Хэрэглэгчийн бүх багцын өгөгдлийг устгана (бүртгэл устгах үед).
+  Future<void> deleteAllData() async {
+    final uid = _uid;
+    if (uid != null && _remote != null) await _remote.delete(uid);
+    final prefs = await _prefs();
+    await prefs.remove(_localKey(uid));
+    _resetState();
+    _notify();
+  }
+
+  List<Transaction> getTransactionsForSymbol(String symbol) =>
+      _transactions.where((t) => t.symbol == symbol).toList();
+
+  List<Transaction> getRecentTransactions({int days = 30}) {
+    final cutoff = DateTime.now().subtract(Duration(days: days));
+    return _transactions.where((t) => t.timestamp.isAfter(cutoff)).toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  Future<double> getTotalPortfolioValue() async => totalValue;
+
+  // ---------------------------------------------------------------------------
+  // Бодит ханш ба гүйцэтгэл
+  // ---------------------------------------------------------------------------
+
+  /// Бодит ханшаар (MSE, крипто) хувьцаануудын одоогийн үнийг шинэчилнэ.
+  /// [previousCloses] өгвөл өнөөдрийн өөрчлөлтийг тооцно.
+  void updateLivePrices(Map<String, double> prices,
+      {Map<String, double>? previousCloses}) {
+    if (previousCloses != null) {
+      _previousCloses = {..._previousCloses, ...previousCloses};
+    }
+    var changed = false;
+    _holdings = _holdings.map((h) {
+      final price = prices[h.symbol];
+      if (price == null || price <= 0 || price == h.currentPrice) return h;
+      changed = true;
+      return h.copyWith(currentPrice: price);
+    }).toList();
+    if (!changed || _isLoading) return;
+
+    _recordSnapshot();
+    // Үнэлгээний түүхийг 15 минут тутамд л хадгална (Firestore-ийн бичилт хэмнэх)
+    final now = DateTime.now();
+    if (_lastHistorySave == null ||
+        now.difference(_lastHistorySave!) > const Duration(minutes: 15)) {
+      _lastHistorySave = now;
+      unawaited(_save());
+    }
+    _notify();
+  }
+
+  /// Өнөөдрийн өөрчлөлт (₮): Σ ширхэг × (одоогийн ханш − өмнөх өдрийн хаалт).
+  /// Ханш мэдэгдэхгүй бол null.
+  double? get dayChange {
+    var sum = 0.0;
+    var known = false;
+    for (final h in _holdings) {
+      final prev = _previousCloses[h.symbol];
+      if (prev == null || prev <= 0 || h.currentPrice <= 0) continue;
+      sum += h.quantity * (h.currentPrice - prev);
+      known = true;
+    }
+    return known ? sum : null;
+  }
+
+  /// [days] хоногийн өмнөх үнэлгээнээс хэр өөрчлөгдсөн (₮). Түүх хүрэлцэхгүй бол null.
+  double? changeSince(int days) {
+    final cutoff = _day(DateTime.now()).subtract(Duration(days: days));
+    ValuePoint? base;
+    for (final p in _valueHistory) {
+      if (!p.day.isAfter(cutoff)) base = p;
+    }
+    if (base == null) return null;
+    return totalValue - base.value;
+  }
+
+  /// Өдөр бүрийн сүүлийн үнэлгээг хадгална (графикт).
+  void _recordSnapshot() {
+    final today = _day(DateTime.now());
+    final value = totalValue;
+    if (_valueHistory.isNotEmpty && _valueHistory.last.day == today) {
+      _valueHistory[_valueHistory.length - 1] = ValuePoint(today, value);
+    } else {
+      _valueHistory.add(ValuePoint(today, value));
+      if (_valueHistory.length > _maxHistoryPoints) {
+        _valueHistory.removeRange(0, _valueHistory.length - _maxHistoryPoints);
+      }
+    }
+  }
+
+  static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authSub?.cancel();
+    super.dispose();
+  }
+}
+
+/// Нэг өдрийн багцын нийт үнэлгээ.
+class ValuePoint {
+  final DateTime day;
+  final double value;
+  const ValuePoint(this.day, this.value);
+
+  Map<String, dynamic> toJson() =>
+      {'day': day.toIso8601String().substring(0, 10), 'value': value};
+
+  factory ValuePoint.fromJson(Map<String, dynamic> j) =>
+      ValuePoint(DateTime.parse(j['day'] as String), (j['value'] as num).toDouble());
+}
+
+/// Багцыг серверт хадгалах интерфэйс (тестэд хуурамчаар солих боломжтой).
+abstract class PortfolioRemoteStore {
+  Future<Map<String, dynamic>?> load(String uid);
+  Future<void> save(String uid, Map<String, dynamic> data);
+  Future<void> delete(String uid);
+}
+
+class FirestorePortfolioStore implements PortfolioRemoteStore {
+  DocumentReference<Map<String, dynamic>> _doc(String uid) => FirebaseFirestore
+      .instance
+      .collection('users')
+      .doc(uid)
+      .collection('portfolio')
+      .doc('state');
+
+  @override
+  Future<Map<String, dynamic>?> load(String uid) async {
+    final snap = await _doc(uid).get().timeout(const Duration(seconds: 10));
+    return snap.data();
+  }
+
+  @override
+  Future<void> save(String uid, Map<String, dynamic> data) =>
+      _doc(uid).set(data);
+
+  @override
+  Future<void> delete(String uid) => _doc(uid).delete();
+}

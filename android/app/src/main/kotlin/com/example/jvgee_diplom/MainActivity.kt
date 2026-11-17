@@ -1,5 +1,6 @@
 package com.example.jvgee_diplom
 
-import io.flutter.embedding.android.FlutterActivity
+// local_auth (биометр) нь FragmentActivity шаарддаг
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+class MainActivity : FlutterFragmentActivity()

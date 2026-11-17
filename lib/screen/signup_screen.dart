@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:jvgee_diplom/screen/login_screen.dart';
@@ -29,7 +30,7 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_acceptTerms) {
-      setState(() => _errorMessage = 'You must accept the terms and conditions');
+      setState(() => _errorMessage = 'Та үйлчилгээний нөхцөлийг хүлээн зөвшөөрөх хэрэгтэй!');
       return;
     }
 
@@ -43,7 +44,15 @@ class _SignupScreenState extends State<SignupScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(credential.user?.uid)
+          .set({
+        'email': _emailController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'emailVerified': false,
+        'role': 'user', // default role
+      });
       await credential.user?.sendEmailVerification();
 
       if (mounted) {
@@ -53,7 +62,7 @@ class _SignupScreenState extends State<SignupScreen> {
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Sign up successful! Please verify your email.'),
+            content: Text('Бүртгэл амжилттай үүслээ.И-Мэйл хаягаа баталгаажуулна уу!'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -75,7 +84,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     switch (e.code) {
       case 'email-already-in-use':
-        message = 'This email is already registered. Please log in.';
+        message = 'Энэ И-Мэйл хаяг аль хэдийн бүртгэгдсэн байна.Нэвтрэх?';
         break;
       case 'invalid-email':
         message = 'Please enter a valid email address.';
