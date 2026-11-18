@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +21,9 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         final user = snapshot.data;
         if (user == null || !user.emailVerified) return LoginScreen();
-        final biometric = context.watch<AppState>().isBiometricEnabled;
+        // local_auth вэбд ажилладаггүй тул вэб хувилбарт түгжээ асуухгүй.
+        final biometric =
+            !kIsWeb && context.watch<AppState>().isBiometricEnabled;
         return biometric ? BiometricLock(child: HomeScreen()) : HomeScreen();
       },
     );
@@ -38,6 +41,7 @@ class BiometricLock extends StatefulWidget {
   /// Тохиргоонд биометр асаахаас өмнө төхөөрөмж дэмжиж байгаа эсэхийг
   /// шалгаж, нэг удаа баталгаажуулна.
   static Future<bool> confirm(String reason) async {
+    if (kIsWeb) return false;
     final auth = LocalAuthentication();
     try {
       if (!await auth.isDeviceSupported()) return false;

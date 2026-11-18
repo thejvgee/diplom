@@ -4,12 +4,15 @@ import 'package:flutter/foundation.dart';
 
 import '../models/mse_quote.dart';
 import '../services/mse_service.dart';
+import '../services/mse_snapshot_service.dart';
 
 /// MSE-ийн ханшийг үе үе татаж, дэлгэцүүдэд түгээдэг provider.
 ///
 /// * Арилжааны цагаар (Даваа–Баасан ~10:00–13:00 УБ) [openInterval] тутам,
 ///   бусад үед [closedInterval] тутам шинэчилнэ.
 /// * Зөвхөн сонгосон ангиллын болон багцад байгаа хувьцааны ханшийг татна.
+/// * Вэб хувилбарт open.mse.mn CORS-оор хаалттай тул GitHub Actions-ийн
+///   өдөр бүр нийтэлдэг snapshot-оос ([MseSnapshotService]) уншина.
 class MseMarketProvider extends ChangeNotifier {
   final MseService _service;
   Duration? _openInterval;
@@ -40,7 +43,7 @@ class MseMarketProvider extends ChangeNotifier {
     MseService? service,
     Duration? openInterval = const Duration(seconds: 60),
     this.closedInterval = const Duration(minutes: 15),
-  })  : _service = service ?? MseService(),
+  })  : _service = service ?? (kIsWeb ? MseSnapshotService() : MseService()),
         _openInterval = openInterval;
 
   List<MseSecurity> _securities = [];
@@ -68,6 +71,15 @@ class MseMarketProvider extends ChangeNotifier {
   String? get error => _error;
   DateTime? get lastUpdated => _lastUpdated;
   bool get isMarketOpen => MseService.isMarketOpen();
+
+  /// Нийтлэгдсэн snapshot-оос уншиж байгаа эсэх (вэб хувилбар).
+  bool get isSnapshot => _service is MseSnapshotService;
+
+  /// Snapshot-ийн ханшийг open.mse.mn-ээс хэзээ татсан бэ (вэб хувилбар).
+  DateTime? get snapshotTime {
+    final service = _service;
+    return service is MseSnapshotService ? service.generatedAt : null;
+  }
 
   MseQuote? quoteFor(String symbol) => _quotes[symbol];
   MseSecurity? securityFor(String symbol) {

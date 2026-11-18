@@ -1,11 +1,17 @@
-# AI зөвлөхийн дохиог өдөр бүр шинэчилж Firebase Hosting-д нийтэлнэ.
-# Апп нь https://diplom-23056.web.app/ai/signals.json-оос татна.
+# AI зөвлөхийн дохио, MSE-ийн ханш, вэб апп-ыг өдөр бүр шинэчилж Firebase
+# Hosting-д (https://diplom-23056.web.app) нэг дор байршуулна:
+#   /        вэб апп (flutter build web)
+#   /ai/     signals.json — mobile ба вэб апп хоёулаа татна
+#   /mse/    market.json + history/ — вэб апп (open.mse.mn CORS-гүй тул)
 #
-# Нэг удаагийн тохиргоо (docs/signals_pipeline.md-г үз):
+# Firebase Hosting нь deploy бүрт сайтыг бүхэлд нь солидог тул энэ гурвыг
+# үргэлж хамт байршуулна (tool/assemble_hosting.dart).
+#
+# Нэг удаагийн тохиргоо (docs/signals_pipeline.md, docs/web_deploy.md):
 #   1. Firebase Console → Hosting → "Get started"
 #   2. GitHub repo → Settings → Secrets → FIREBASE_SERVICE_ACCOUNT
 #      (`firebase init hosting:github` автоматаар үүсгэнэ)
-name: Refresh AI signals
+name: Refresh AI signals and deploy web
 
 on:
   schedule:
@@ -13,6 +19,18 @@ on:
     - cron: '45 5 * * 1-5'
     # Ням гараг 10:00 УБ — бүтэн түүхийг дахин татаж залруулна
     - cron: '0 2 * * 0'
+  # main-д апп-ын код өөрчлөгдөхөд вэб хувилбарыг шууд шинэчилнэ
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'tool/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'firebase.json'
+      - '.github/workflows/refresh-signals.yml'
   workflow_dispatch:
     inputs:
       full_refresh:
@@ -75,21 +93,28 @@ jobs:
         run: dart run tool/train_advisor.dart
 
       - name: Run tests
-        run: flutter test test/ai_engine_test.dart test/ai_engine_v2_test.dart test/history_update_test.dart test/goal_planner_test.dart
+        run: flutter test test/ai_engine_test.dart test/ai_engine_v2_test.dart test/history_update_test.dart test/goal_planner_test.dart test/mse_snapshot_service_test.dart
 
-      - name: Prepare hosting files
-        run: |
-          mkdir -p build/hosting/ai
-          cp assets/ai/signals.json assets/ai/advisor_model.json build/hosting/ai/
-          cp docs/ai_model_report.md build/hosting/ai/report.md
-          cp tool/data/signal_log.json build/hosting/ai/signal_log.json
-          printf '<!doctype html><meta charset="utf-8"><title>AI signals</title><a href="ai/signals.json">signals.json</a> · <a href="ai/report.md">report</a>\n' > build/hosting/index.html
+      # open.mse.mn CORS header өгдөггүй тул вэб апп энэ JSON-оос уншина
+      - name: Publish MSE quotes (I–III) for the web app
+        run: dart run tool/publish_market.dart --out build/mse
+
+      # Шинэ signals.json апп-д багцлагдахын тулд сургалтын дараа build хийнэ.
+      # Firebase-ийн вэб тохиргоог апп сайтын /__/firebase/init.json-оос
+      # уншина; FIREBASE_WEB_API_KEY secret (заавал биш) өгвөл түүгээр.
+      - name: Build web app
+        run: flutter build web --release --dart-define=FIREBASE_WEB_API_KEY=${{ secrets.FIREBASE_WEB_API_KEY }}
+
+      - name: Assemble hosting folder (web + ai + mse)
+        run: dart run tool/assemble_hosting.dart --web build/web --mse build/mse --out build/hosting
 
       - name: Keep a copy as artifact
         uses: actions/upload-artifact@v4
         with:
           name: ai-signals
-          path: build/hosting/ai
+          path: |
+            build/hosting/ai
+            build/hosting/mse/market.json
           retention-days: 30
 
       - name: Deploy to Firebase Hosting

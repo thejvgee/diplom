@@ -147,9 +147,20 @@ class _MarketScreenState extends State<MarketScreen>
   Widget _buildMseHeader(MseMarketProvider mse) {
     final marketOpen = mse.isMarketOpen;
     final updated = mse.lastUpdated;
-    final updatedText = updated == null
-        ? ''
-        : ' · Шинэчлэгдсэн: ${DateFormat('HH:mm:ss').format(updated)}';
+    final snapshotTime = mse.snapshotTime;
+    final updatedText = mse.isSnapshot
+        ? (snapshotTime == null
+            ? ''
+            : ' · ${DateFormat('yyyy-MM-dd HH:mm').format(snapshotTime)}-ийн байдлаар')
+        : updated == null
+            ? ''
+            : ' · Шинэчлэгдсэн: ${DateFormat('HH:mm:ss').format(updated)}';
+    final statusText = mse.isSnapshot
+        // Вэб: GitHub Actions өдөрт нэг удаа (хаалтын дараа) нийтэлнэ.
+        ? 'Вэб хувилбар · өдрийн хаалтын ханш'
+        : marketOpen
+            ? 'Арилжаа явагдаж байна (1 мин тутам шинэчилнэ)'
+            : 'Арилжаа хаалттай · сүүлийн арилжааны ханш';
 
     return Padding(
       padding: EdgeInsets.fromLTRB(12, 8, 12, 4),
@@ -159,15 +170,17 @@ class _MarketScreenState extends State<MarketScreen>
           Row(
             children: [
               Icon(Icons.circle,
-                  size: 10, color: marketOpen ? Colors.green : Colors.grey),
+                  size: 10,
+                  color: marketOpen && !mse.isSnapshot
+                      ? Colors.green
+                      : Colors.grey),
               SizedBox(width: 6),
-              Text(
-                marketOpen
-                    ? 'Арилжаа явагдаж байна (1 мин тутам шинэчилнэ)'
-                    : 'Арилжаа хаалттай · сүүлийн арилжааны ханш',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              Expanded(
+                child: Text(
+                  statusText,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                ),
               ),
-              Spacer(),
               if (mse.isRefreshing)
                 SizedBox(
                   width: 14,
@@ -576,7 +589,8 @@ class _MarketScreenState extends State<MarketScreen>
         final down = traded.where((q) => q.change < 0).length;
         final turnover = traded.fold<double>(0, (a, q) => a + q.turnover);
         const cats = ['I', 'II', 'III'];
-        final updated = mse.lastUpdated;
+        // Вэб хувилбарт ханш нь нийтлэгдсэн snapshot-ийн цагийнх.
+        final updated = mse.snapshotTime ?? mse.lastUpdated;
 
         return ListView(
           key: key,

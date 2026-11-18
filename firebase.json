@@ -44,6 +44,28 @@
             "value": "*"
           }
         ]
+      },
+      {
+        "source": "/mse/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      },
+      {
+        "regex": "^/(index\\.html|flutter_bootstrap\\.js|flutter_service_worker\\.js|main\\.dart\\.js|version\\.json|manifest\\.json)?$",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          }
+        ]
       }
     ]
   }

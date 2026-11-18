@@ -93,6 +93,56 @@ class MseQuote {
       previousClose > 0 && last > 0 ? (change / previousClose) * 100 : 0;
 
   bool get tradedToday => volume > 0;
+
+  /// Вэб хувилбарт нийтлэх (`tool/publish_market.dart` → `mse/market.json`).
+  Map<String, dynamic> toJson() => {
+    'symbol': symbol,
+    'previousClose': previousClose,
+    'open': open,
+    'last': last,
+    'vwap': vwap,
+    'bidPrice': bidPrice,
+    'bidQty': bidQty,
+    'askPrice': askPrice,
+    'askQty': askQty,
+    'dayLow': dayLow,
+    'dayHigh': dayHigh,
+    'volume': volume,
+    'turnover': turnover,
+    'trades': trades,
+    'week52Low': week52Low,
+    'week52High': week52High,
+    'isin': isin,
+    'marketCap': marketCap,
+    'fetchedAt': fetchedAt.toUtc().toIso8601String(),
+  };
+
+  factory MseQuote.fromJson(Map<String, dynamic> json) {
+    double d(String k) => (json[k] as num?)?.toDouble() ?? 0;
+    int i(String k) => (json[k] as num?)?.toInt() ?? 0;
+    return MseQuote(
+      symbol: json['symbol'] as String,
+      previousClose: d('previousClose'),
+      open: d('open'),
+      last: d('last'),
+      vwap: d('vwap'),
+      bidPrice: d('bidPrice'),
+      bidQty: i('bidQty'),
+      askPrice: d('askPrice'),
+      askQty: i('askQty'),
+      dayLow: d('dayLow'),
+      dayHigh: d('dayHigh'),
+      volume: i('volume'),
+      turnover: d('turnover'),
+      trades: i('trades'),
+      week52Low: d('week52Low'),
+      week52High: d('week52High'),
+      isin: json['isin'] as String? ?? '',
+      marketCap: d('marketCap'),
+      fetchedAt:
+          DateTime.tryParse('${json['fetchedAt']}')?.toLocal() ?? DateTime.now(),
+    );
+  }
 }
 
 /// Нэг өдрийн арилжааны түүх (график зурахад).
@@ -112,4 +162,24 @@ class MseDailyBar {
     required this.low,
     required this.volume,
   });
+
+  /// Нягт хэлбэр `[огноо, open, high, low, close, volume]` — `tool/data/history`
+  /// болон вэбд нийтэлдэг `mse/history/<SYMBOL>.json` энэ хэлбэртэй.
+  List<Object> toRow() => [
+    date.toIso8601String().substring(0, 10),
+    open,
+    high,
+    low,
+    close,
+    volume,
+  ];
+
+  factory MseDailyBar.fromRow(List<dynamic> row) => MseDailyBar(
+    date: DateTime.parse(row[0] as String),
+    open: (row[1] as num).toDouble(),
+    high: (row[2] as num).toDouble(),
+    low: (row[3] as num).toDouble(),
+    close: (row[4] as num).toDouble(),
+    volume: (row[5] as num).toInt(),
+  );
 }

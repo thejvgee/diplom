@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
@@ -447,56 +448,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   SizedBox(height: 24.0),
 
-                  // Security Settings
-                  Text(
-                    'Security',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  SizedBox(height: 16.0),
+                  // Security Settings (биометр — local_auth вэбд ажилладаггүй)
+                  if (!kIsWeb) ...[
+                    Text(
+                      'Security',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    SizedBox(height: 16.0),
 
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SwitchListTile(
-                            title: Text('Биометр түгжээ'),
-                            subtitle: Text(appState.isBiometricEnabled
-                                ? 'Апп нээхэд хурууны хээ/царай асууна'
-                                : 'Унтраалттай'),
-                            value: appState.isBiometricEnabled,
-                            onChanged: (value) async {
-                              if (value) {
-                                final ok = await BiometricLock.confirm(
-                                    'Биометр түгжээг асаахын тулд баталгаажуулна уу');
-                                if (!ok) {
-                                  if (!context.mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text(
-                                            'Энэ төхөөрөмж биометр дэмжихгүй эсвэл баталгаажуулалт амжилтгүй')),
-                                  );
-                                  return;
+                    Card(
+                      elevation: 2,
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SwitchListTile(
+                              title: Text('Биометр түгжээ'),
+                              subtitle: Text(appState.isBiometricEnabled
+                                  ? 'Апп нээхэд хурууны хээ/царай асууна'
+                                  : 'Унтраалттай'),
+                              value: appState.isBiometricEnabled,
+                              onChanged: (value) async {
+                                if (value) {
+                                  final ok = await BiometricLock.confirm(
+                                      'Биометр түгжээг асаахын тулд баталгаажуулна уу');
+                                  if (!ok) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(
+                                              'Энэ төхөөрөмж биометр дэмжихгүй эсвэл баталгаажуулалт амжилтгүй')),
+                                    );
+                                    return;
+                                  }
                                 }
-                              }
-                              await appState.toggleBiometric();
-                              if (mounted) setState(() {});
-                            },
-                            secondary: Icon(
-                              Icons.fingerprint,
-                              color: appState.isBiometricEnabled
-                                  ? Colors.green
-                                  : Colors.grey,
+                                await appState.toggleBiometric();
+                                if (mounted) setState(() {});
+                              },
+                              secondary: Icon(
+                                Icons.fingerprint,
+                                color: appState.isBiometricEnabled
+                                    ? Colors.green
+                                    : Colors.grey,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  SizedBox(height: 24.0),
+                    SizedBox(height: 24.0),
+                  ],
 
                   // Preferences
                   Text(

@@ -1,9 +1,9 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:jvgee_diplom/screen/forgot_password_screen.dart';
 import 'package:jvgee_diplom/services/gemini_service.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_init.dart';
 import 'screen/auth_gate.dart';
 import 'screen/home_screen.dart';
 import 'screen/market_screen.dart';
@@ -21,7 +21,13 @@ late final AppLifecycleListener appLifecycleListener;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  try {
+    // Вэб дээр тохиргоог Firebase Hosting-оос уншина (firebase_init.dart).
+    await initFirebase();
+  } catch (e) {
+    runApp(StartupErrorApp(message: '$e'));
+    return;
+  }
   // Gemini-ийн түлхүүрийг эхлэхэд сүлжээгээр шалгахаа больсон: үр дүнг нь
   // ашигладаггүй байсан бөгөөд интернэтгүй үед апп 10 сек хүлээгддэг байв.
   await GeminiService().init();
@@ -91,6 +97,38 @@ void main() async {
       ),
     ),
   );
+}
+
+/// Firebase эхлүүлж чадаагүй үед (жишээ нь вэб тохиргоо алга) цагаан
+/// дэлгэцийн оронд шалтгааныг харуулна.
+class StartupErrorApp extends StatelessWidget {
+  final String message;
+  const StartupErrorApp({super.key, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text('Апп эхлүүлэхэд алдаа гарлаа',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                SelectableText(message, textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class AppTheme extends StatelessWidget {
