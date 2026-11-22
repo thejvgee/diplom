@@ -71,10 +71,12 @@ class FirebaseWebConfig {
     }
 
     final key = s('apiKey');
-    final app = s('appId');
+    // Console дээр вэб апп hosting сайттай холбогдоогүй бол init.json-д
+    // appId ирдэггүй — нууц биш танигч тул анхдагч утгыг ашиглана.
+    final app = s('appId') ?? appId;
     final project = s('projectId');
-    if (key == null || app == null || project == null) {
-      throw const FormatException('init.json-д apiKey/appId/projectId алга');
+    if (key == null || project == null) {
+      throw const FormatException('init.json-д apiKey/projectId алга');
     }
     return FirebaseOptions(
       apiKey: key,

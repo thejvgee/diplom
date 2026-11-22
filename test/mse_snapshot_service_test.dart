@@ -204,6 +204,13 @@ void main() {
       );
     });
 
+    test('init.json-д appId байхгүй бол анхдагч вэб appId-г ашиглана', () {
+      // Console дээр вэб апп hosting сайттай холбогдоогүй үед ингэж ирдэг
+      final o = FirebaseWebConfig.fromInitJson(
+          {'apiKey': 'k', 'projectId': 'diplom-23056', 'authDomain': 'd'});
+      expect(o.appId, FirebaseWebConfig.appId);
+    });
+
     test('сайтын /__/firebase/init.json-оос татна', () async {
       Uri? asked;
       final o = await FirebaseWebConfig.load(
