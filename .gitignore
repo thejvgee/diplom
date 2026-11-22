@@ -49,3 +49,6 @@ app.*.map.json
 
 # Вэб хувилбарын дотоод тохиргоо (Firebase web apiKey) — docs/web_deploy.md
 /web_config.json
+
+# Firebase CLI deploy cache
+.firebase/
