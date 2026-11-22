@@ -3,6 +3,9 @@ git clone https://github.com/lucilfer1111/diplom.git<br>
 flutter pub get<br>
 flutter run
 
+Вэб хувилбар (Firebase Hosting): https://diplom-23056.web.app — байршуулах заавар
+[docs/web_deploy.md](docs/web_deploy.md)<br>
+
 <p float="left">
   <img src="https://github.com/user-attachments/assets/280296db-729a-425a-a270-92e1212cc852" width="250"/>
   <img src="https://github.com/user-attachments/assets/ee6c7c6b-0a96-4361-8ec7-b9a76ddd11b2" width="250"/>

@@ -1,0 +1,12 @@
+# Release гарын үсгийн тохиргоо. Энэ файлыг android/key.properties болгон
+# хуулж, утгуудаа бөглөнө. key.properties ба *.jks файлыг git-д ОРУУЛАХГҮЙ
+# (android/.gitignore-д аль хэдийн нэмэгдсэн).
+#
+# Түлхүүр үүсгэх (нэг удаа):
+#   keytool -genkey -v -keystore %USERPROFILE%\upload-keystore.jks ^
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+storePassword=<keystore-ийн нууц үг>
+keyPassword=<түлхүүрийн нууц үг>
+keyAlias=upload
+storeFile=C:/Users/<таны нэр>/upload-keystore.jks

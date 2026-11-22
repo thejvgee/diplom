@@ -13,8 +13,26 @@ class Holding {
     this.currentPrice = 0.0,
   });
   
+  Map<String, dynamic> toJson() => {
+        'symbol': symbol,
+        'quantity': quantity,
+        'averageCost': averageCost,
+        'sector': sector,
+        'currentPrice': currentPrice,
+      };
+
+  factory Holding.fromJson(Map<String, dynamic> json) => Holding(
+        symbol: json['symbol'] as String,
+        quantity: (json['quantity'] as num).toDouble(),
+        averageCost: (json['averageCost'] as num).toDouble(),
+        sector: json['sector'] as String? ?? 'Unknown',
+        currentPrice: (json['currentPrice'] as num?)?.toDouble() ?? 0,
+      );
+
   double get totalCost => quantity * averageCost;
-  double get currentValue => quantity * currentPrice;
+  /// Ханш хараахан ирээгүй (0) бол дундаж өртгийг ашиглана.
+  double get effectivePrice => currentPrice > 0 ? currentPrice : averageCost;
+  double get currentValue => quantity * effectivePrice;
   double get profitLoss => currentValue - totalCost;
   double get profitLossPercentage => totalCost > 0 ? (profitLoss / totalCost) * 100 : 0;
   

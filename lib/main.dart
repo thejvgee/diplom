@@ -1,91 +1,138 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:jvgee_diplom/screen/forgot_password_screen.dart';
+import 'package:jvgee_diplom/services/gemini_service.dart';
 import 'package:provider/provider.dart';
-import 'screen/login_screen.dart'; // Import all screen files
+import 'package:shared_preferences/shared_preferences.dart';
+import 'firebase_init.dart';
+import 'screen/auth_gate.dart';
 import 'screen/home_screen.dart';
 import 'screen/market_screen.dart';
 import 'providers/app_state.dart';
-import 'services/ai_financial_service.dart';
-import 'providers/ai_financial_provider.dart';
-import 'screen/ai_financial_screen.dart';
-import 'services/api_key_service.dart';
-import 'services/market_data_service.dart';
 import 'providers/portfolio_provider.dart';
+import 'providers/mse_market_provider.dart';
+import 'providers/crypto_market_provider.dart';
+import 'providers/advisor_provider.dart';
+import 'providers/chat_grounding.dart';
 import 'providers/user_preferences_provider.dart';
-import 'providers/investment_agent_provider.dart';
 import 'screen/portfolio_suggestions_screen.dart';
+
+/// Апп далд/ил болох үед ханшийн шинэчлэлийг зогсоох/сэргээх.
+late final AppLifecycleListener appLifecycleListener;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  // Get the Gemini API key from secure storage
-  final geminiApiKey = await ApiKeyService.getGeminiApiKey();
-
-  // Only validate if the key is not empty
-  bool isValidApiKey = false;
-  if (geminiApiKey.isNotEmpty) {
-    isValidApiKey = await ApiKeyService.validateGeminiApiKey(geminiApiKey);
-    if (!isValidApiKey) {
-      print('Warning: Gemini API key validation failed. Some AI features may not work correctly.');
-    }
-  } else {
-    print('No Gemini API key provided. AI features will not be available.');
+  try {
+    // Вэб дээр тохиргоог Firebase Hosting-оос уншина (firebase_init.dart).
+    await initFirebase();
+  } catch (e) {
+    runApp(StartupErrorApp(message: '$e'));
+    return;
   }
+  // Gemini-ийн түлхүүрийг эхлэхэд сүлжээгээр шалгахаа больсон: үр дүнг нь
+  // ашигладаггүй байсан бөгөөд интернэтгүй үед апп 10 сек хүлээгддэг байв.
+  await GeminiService().init();
+  final sharedPrefs = await SharedPreferences.getInstance();
 
-  // Create the market data service
-  final marketDataService = MarketDataService();
-  await marketDataService.initialize();
+  // Монголын хөрөнгийн биржийн бодит ханш (open.mse.mn, үнэгүй)
+  final mseMarket = MseMarketProvider()
+    ..setRefreshInterval(MseMarketProvider.parseRefreshInterval(
+        sharedPrefs.getString(MseMarketProvider.refreshPrefKey)))
+    ..start();
+  // Крипто ханш (Binance) + ам.доллар/төгрөгийн ханш
+  final cryptoMarket = CryptoMarketProvider()..start();
+
+  appLifecycleListener = AppLifecycleListener(
+    onHide: () {
+      mseMarket.pause();
+      cryptoMarket.pause();
+    },
+    onShow: () {
+      mseMarket.resume();
+      cryptoMarket.resume();
+    },
+  );
+
+  // Нэвтэрсэн хэрэглэгч бүрийн багц (Firestore + утасны кэш)
+  final portfolio = PortfolioProvider();
+  void trackHoldings() =>
+      mseMarket.trackSymbols(portfolio.holdings.map((h) => h.symbol));
+  portfolio.addListener(trackHoldings);
+  mseMarket.addListener(() => portfolio.updateLivePrices(
+        mseMarket.lastPrices,
+        previousCloses: mseMarket.previousCloses,
+      ));
+  cryptoMarket.addListener(
+      () => portfolio.updateLivePrices(cryptoMarket.lastPricesMnt));
+
+  // Өөрийн AI зөвлөх (Gemini-гүй) ба хэрэглэгчийн тохиргоо
+  final advisor = AdvisorProvider()..load();
+  final userPreferences = UserPreferencesProvider();
+
+  // AI чатыг апп-ын бодит өгөгдөлд тулгуурлуулах
+  final grounding = ChatGrounding(
+    advisor: advisor,
+    portfolio: portfolio,
+    preferences: userPreferences,
+    mse: mseMarket,
+  );
+  GeminiService()
+    ..contextBuilder = grounding.context
+    ..localAnswer = grounding.localAnswer
+    ..offlineAnswer = grounding.offlineAnswer
+    ..toolHandler = grounding.tool;
 
   runApp(
     MultiProvider(
       providers: [
-        Provider<AIFinancialService>(
-          create: (_) => AIFinancialService(
-            geminiApiKey: geminiApiKey,
-          ),
-        ),
-        ChangeNotifierProxyProvider<AIFinancialService, AIFinancialProvider>(
-          create: (context) => AIFinancialProvider(
-            aiService: context.read<AIFinancialService>(),
-          ),
-          update: (context, aiService, previous) => AIFinancialProvider(
-            aiService: aiService,
-          ),
-        ),
-        // Add investment agent provider
-        ChangeNotifierProvider<InvestmentAgentProvider>(
-          create: (_) => InvestmentAgentProvider(),
-        ),
-        // Add market data service provider
-        Provider<MarketDataService>.value(
-           value: marketDataService,
-        ),
-        // Add portfolio provider
-        ChangeNotifierProxyProvider<MarketDataService, PortfolioProvider>(
-          create: (context) => PortfolioProvider(
-            marketDataService: context.read<MarketDataService>(),
-          )..addSampleHoldings(), // Initialize with sample data
-          update: (context, marketDataService, previous) => previous!,
-        ),
-        // Add user preferences provider
-        ChangeNotifierProvider<UserPreferencesProvider>(
-          create: (_) => UserPreferencesProvider(),
-        ),
+        ChangeNotifierProvider<MseMarketProvider>.value(value: mseMarket),
+        ChangeNotifierProvider<CryptoMarketProvider>.value(value: cryptoMarket),
+        ChangeNotifierProvider<AdvisorProvider>.value(value: advisor),
+        ChangeNotifierProvider<PortfolioProvider>.value(value: portfolio),
+        ChangeNotifierProvider<UserPreferencesProvider>.value(
+            value: userPreferences),
       ],
       child: ChangeNotifierProvider(
         create: (_) => AppState(),
-        child: AppTheme(geminiApiKey: geminiApiKey, hasValidApiKey: isValidApiKey),
+        child: AppTheme(),
       ),
     ),
   );
 }
 
-class AppTheme extends StatelessWidget {
-  final String geminiApiKey;
-  final bool hasValidApiKey;
+/// Firebase эхлүүлж чадаагүй үед (жишээ нь вэб тохиргоо алга) цагаан
+/// дэлгэцийн оронд шалтгааныг харуулна.
+class StartupErrorApp extends StatelessWidget {
+  final String message;
+  const StartupErrorApp({super.key, required this.message});
 
-  const AppTheme({Key? key, required this.geminiApiKey, required this.hasValidApiKey}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text('Апп эхлүүлэхэд алдаа гарлаа',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                SelectableText(message, textAlign: TextAlign.center),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AppTheme extends StatelessWidget {
+  const AppTheme({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -99,11 +146,11 @@ class AppTheme extends StatelessWidget {
       theme: _buildLightTheme(),
       darkTheme: _buildDarkTheme(),
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: LoginScreen(),
+      // Нэвтэрсэн хэрэглэгчийг шууд нүүр хуудас руу оруулна
+      home: AuthGate(),
       routes: {
         '/home': (context) => HomeScreen(),
         '/market': (context) => MarketScreen(),
-        '/ai_financial': (context) => AIFinancialScreen(geminiApiKey: geminiApiKey),
         '/portfolio_suggestions': (context) => PortfolioSuggestionsScreen(),
         '/forgot_password': (context) => ForgotPasswordScreen(),
       },
@@ -163,7 +210,7 @@ class AppTheme extends StatelessWidget {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
           elevation: MaterialStateProperty.resolveWith<double>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) return 0;
               if (states.contains(MaterialState.hovered)) return 2;
               return 1;
@@ -177,7 +224,7 @@ class AppTheme extends StatelessWidget {
           ),
           animationDuration: const Duration(milliseconds: 200),
           overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return Colors.white.withOpacity(0.1);
               }
@@ -207,7 +254,7 @@ class AppTheme extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           side: MaterialStateProperty.resolveWith<BorderSide>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return BorderSide(color: colorScheme.primary, width: 2);
               }
@@ -406,7 +453,7 @@ class AppTheme extends StatelessWidget {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
           elevation: MaterialStateProperty.resolveWith<double>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) return 0;
               if (states.contains(MaterialState.hovered)) return 2;
               return 1;
@@ -420,7 +467,7 @@ class AppTheme extends StatelessWidget {
           ),
           animationDuration: const Duration(milliseconds: 200),
           overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return Colors.black.withOpacity(0.1);
               }
@@ -450,7 +497,7 @@ class AppTheme extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
           side: MaterialStateProperty.resolveWith<BorderSide>(
-            (Set<MaterialState> states) {
+                (Set<MaterialState> states) {
               if (states.contains(MaterialState.pressed)) {
                 return BorderSide(color: colorScheme.primary, width: 2);
               }

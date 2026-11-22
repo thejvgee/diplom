@@ -238,7 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
       controller: _emailController,
       autofillHints: [AutofillHints.email],
       decoration: InputDecoration(
-        labelText: 'Майл хаяг',
+        labelText: 'И-Мэйл хаяг',
         labelStyle: TextStyle(color: Colors.white70),
         prefixIcon: Icon(Icons.email, color: Colors.white70),
         filled: true,
@@ -258,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
       textInputAction: TextInputAction.next,
       validator: (value) {
         if (value == null || value.isEmpty) {
-          return 'Please enter your email';
+          return 'И-Мэйл хаягаа оруулна уу!';
         }
         value=value.trim();
         if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {

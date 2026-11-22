@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# MSE dataset cache (dart run tool/build_dataset.dart)
+/tool/data/
+
+# Вэб хувилбарын дотоод тохиргоо (Firebase web apiKey) — docs/web_deploy.md
+/web_config.json
+
+# Firebase CLI deploy cache
+.firebase/

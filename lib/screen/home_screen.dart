@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'portfolio_screen.dart';
 import 'market_screen.dart';
 import 'ai_advisor_screen.dart';
@@ -13,7 +12,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
-  final _storage = FlutterSecureStorage();
   late final List<Widget> _screens;
   bool _isInitialized = false;
 
@@ -72,9 +70,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-
-    // Get the theme's color scheme
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: AnimatedSwitcher(
